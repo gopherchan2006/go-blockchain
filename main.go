@@ -55,6 +55,22 @@ func main() {
 		fmt.Println("  ✓ Chain is valid!\n")
 	}
 
+	fmt.Println("► Storing arbitrary data on-chain (like Bible verse in BTC block 666,666)...")
+	dataMessage := "Do not be overcome by evil, but overcome evil with good — Romans 12:21"
+	tx3, err := NewDataTransaction(alice, dataMessage, bc)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	fmt.Printf("  Message: \"%s\"\n", dataMessage)
+	fmt.Printf("  Message hash: %s\n\n", tx3.Hash())
+	
+	fmt.Println("► Mining block #3 with embedded data...")
+	bc.AddBlock([]*Transaction{tx3}, miner.Address())
+	
+	fmt.Printf("  Block data: %s\n", bc.Blocks[3].Transactions[1].Data)
+	fmt.Printf("  This data is now permanently in the blockchain!\n\n")
+
 	fmt.Println("► Simulating attack: tampering with a transaction in block #1...")
 	bc.Blocks[1].Transactions[1].Outputs[0].Amount = 9999
 	bc.Blocks[1].Hash = bc.Blocks[1].CalculateHash()

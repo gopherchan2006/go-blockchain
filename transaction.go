@@ -25,6 +25,7 @@ type Transaction struct {
 	ID      string
 	Inputs  []TxInput
 	Outputs []TxOutput
+	Data    string // Arbitrary data stored on-chain (text, JSON, etc)
 }
 
 func (tx *Transaction) IsCoinbase() bool {
@@ -32,7 +33,7 @@ func (tx *Transaction) IsCoinbase() bool {
 }
 
 func (tx *Transaction) Hash() string {
-	data := fmt.Sprintf("%v%v", tx.Inputs, tx.Outputs)
+	data := fmt.Sprintf("%v%v%s", tx.Inputs, tx.Outputs, tx.Data)
 	h := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(h[:])
 }
@@ -97,6 +98,7 @@ func (tx *Transaction) dataToSign() string {
 	for _, out := range tx.Outputs {
 		data += fmt.Sprintf("%s%.8f", out.Address, out.Amount)
 	}
+	data += tx.Data // Include arbitrary data in signature
 	return data
 }
 
@@ -139,6 +141,49 @@ func NewTransaction(from *Wallet, toAddress string, amount float64, bc *Blockcha
 	}
 
 	tx := &Transaction{Inputs: inputs, Outputs: outputs}
+	tx.ID = tx.Hash()
+
+	if err := tx.Sign(from.PrivKey); err != nil {
+		return nil, err
+	}
+	tx.ID = tx.Hash()
+	return tx, nil
+}
+
+// NewDataTransaction creates a transaction for storing arbitrary data on the blockchain
+// (Similar to Bitcoin's OP_RETURN or storing text in block data field)
+func NewDataTransaction(from *Wallet, data string, bc *Blockchain) (*Transaction, error) {
+	// Data-only transaction: tiny amount to pay for inclusion
+	utxos, total := bc.FindSpendableUTXOs(from.Address(), 0.001)
+
+	if total < 0.001 {
+		return nil, fmt.Errorf("insufficient funds for data transaction: need 0.001, available %.8f", total)
+	}
+
+	var inputs []TxInput
+	for txID, outIndexes := range utxos {
+		for _, idx := range outIndexes {
+			inputs = append(inputs, TxInput{
+				TxID:     txID,
+				OutIndex: idx,
+				PubKey:   append(from.PrivKey.PublicKey.X.Bytes(), from.PrivKey.PublicKey.Y.Bytes()...),
+			})
+		}
+	}
+
+	// Dust output (minimal amount) or send back as change
+	outputs := []TxOutput{
+		{Amount: 0.001, Address: "DATA_STORAGE"},
+	}
+	if total > 0.001 {
+		outputs = append(outputs, TxOutput{Amount: total - 0.001, Address: from.Address()})
+	}
+
+	tx := &Transaction{
+		Inputs:  inputs,
+		Outputs: outputs,
+		Data:    data,
+	}
 	tx.ID = tx.Hash()
 
 	if err := tx.Sign(from.PrivKey); err != nil {

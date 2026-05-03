@@ -28,8 +28,16 @@ func NewBlock(index int, txs []*Transaction, prevHash string) *Block {
 
 func (b *Block) CalculateHash() string {
 	txData, _ := json.Marshal(b.Transactions)
-	raw := fmt.Sprintf("%d%d%s%s%d", b.Index, b.Timestamp, txData, b.PrevHash, b.Nonce)
+	raw := fmt.Sprintf(
+		"%d%d%s%s%d", 
+		b.Index, 
+		b.Timestamp, 
+		txData, 
+		b.PrevHash, 
+		b.Nonce,
+	)
 	h := sha256.Sum256([]byte(raw))
+	
 	return hex.EncodeToString(h[:])
 }
 
