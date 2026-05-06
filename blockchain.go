@@ -89,6 +89,39 @@ func (bc *Blockchain) Close() error {
 	return bc.db.Close()
 }
 
+func (bc *Blockchain) Height() int {
+	return bc.height
+}
+
+func OpenBlockchain(dbPath string) (*Blockchain, error) {
+	db, err := leveldb.OpenFile(dbPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	bc := &Blockchain{db: db, height: -1}
+	exists, err := db.Has([]byte("height"), nil)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if !exists {
+		db.Close()
+		return nil, fmt.Errorf("blockchain not initialized at %s", dbPath)
+	}
+	heightData, err := db.Get([]byte("height"), nil)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	h, err := strconv.Atoi(string(heightData))
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	bc.height = h
+	return bc, nil
+}
+
 func (bc *Blockchain) AddBlock(txs []*Transaction, minerAddress string) (*Block, error) {
 	coinbase := NewCoinbaseTx(minerAddress, BlockReward)
 	txs = append([]*Transaction{coinbase}, txs...)
