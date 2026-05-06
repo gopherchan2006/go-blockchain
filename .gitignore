@@ -2,3 +2,5 @@ go-blockchain.exe
 *.exe
 *.md
 *.html
+*.json
+docs
