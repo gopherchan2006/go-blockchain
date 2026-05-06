@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoChain Explorer</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --orange: #f0883e;
+      --purple: #bc8cff;
+      --red: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    header h1 { font-size: 16px; font-weight: 600; color: var(--blue); letter-spacing: .3px; }
+    .refresh-badge {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface2);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--border);
+      gap: 1px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat {
+      background: var(--surface);
+      padding: 18px 24px;
+      text-align: center;
+    }
+    .stat .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .stat .value {
+      font-size: 26px;
+      font-weight: 700;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .blue { color: var(--blue); }
+    .green { color: var(--green); }
+    .orange { color: var(--orange); }
+    .red { color: var(--red); }
+    .purple { color: var(--purple); }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .wallets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .wallet-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      transition: border-color .2s, transform .15s;
+    }
+    .wallet-card:hover { border-color: var(--blue); transform: translateY(-1px); }
+    .wallet-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .wallet-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      background: linear-gradient(135deg, #1f4068, #1b1b2f);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .wallet-name {
+      font-size: 15px;
+      font-weight: 600;
+      text-transform: capitalize;
+      color: var(--text);
+    }
+    .wallet-addr {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--surface2);
+      padding: 5px 8px;
+      border-radius: 5px;
+      margin-bottom: 14px;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    .wallet-balance {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .wallet-balance span { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+    .block-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .block-card:hover { border-color: #444d56; }
+    .block-header {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      cursor: pointer;
+      gap: 14px;
+      user-select: none;
+      transition: background .15s;
+    }
+    .block-header:hover { background: var(--surface2); }
+    .block-index {
+      background: var(--blue);
+      color: #000;
+      font-weight: 700;
+      font-size: 12px;
+      font-family: monospace;
+      padding: 4px 10px;
+      border-radius: 5px;
+      min-width: 44px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .block-index.genesis { background: var(--purple); }
+    .block-hash-display {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .block-hash-display .zeros { color: var(--orange); font-weight: 700; }
+    .block-hash-display .rest { color: var(--muted); }
+    .block-meta {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .block-meta span { display: flex; align-items: center; gap: 3px; }
+    .nonce-val { color: var(--yellow); }
+    .tx-count-val { color: var(--purple); }
+    .time-val { color: var(--muted); }
+    .block-chevron {
+      color: var(--muted);
+      font-size: 10px;
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .block-chevron.open { transform: rotate(90deg); }
+    .block-body { display: none; }
+    .block-body.open { display: block; }
+    .block-hashes {
+      padding: 10px 16px;
+      background: var(--surface2);
+      border-top: 1px solid var(--border);
+      font-family: monospace;
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .tx-item {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .tx-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .tx-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .tx-badge.coinbase { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+    .tx-badge.transfer { background: rgba(88,166,255,.15); color: var(--blue); border: 1px solid rgba(88,166,255,.3); }
+    .tx-badge.data     { background: rgba(188,140,255,.15); color: var(--purple); border: 1px solid rgba(188,140,255,.3); }
+    .tx-id { font-family: monospace; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+    .tx-outputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .tx-output {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tx-output .amt { color: var(--green); font-weight: 600; font-family: monospace; }
+    .tx-output .arrow { color: var(--border); }
+    .tx-output .addr { font-family: monospace; font-size: 10px; color: var(--muted); }
+    .tx-data-box {
+      margin-top: 8px;
+      background: var(--surface2);
+      border-left: 3px solid var(--purple);
+      padding: 8px 12px;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--text);
+      border-radius: 0 6px 6px 0;
+      line-height: 1.5;
+    }
+    .empty { text-align: center; padding: 48px; color: var(--muted); font-size: 13px; }
+    .blocks-list { display: flex; flex-direction: column; gap: 8px; }
+    @media(max-width:600px) {
+      .stats { grid-template-columns: repeat(2,1fr); }
+      .block-meta { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="dot"></div>
+    <h1>&#x26D3; GoChain Explorer</h1>
+    <div class="refresh-badge" id="refreshBadge">refreshing...</div>
+  </header>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="label">Chain Height</div>
+      <div class="value blue" id="sHeight">—</div>
+    </div>
+    <div class="stat">
+      <div class="label">Status</div>
+      <div class="value" id="sValid">—</div>
+    </div>
+    <div class="stat">
+      <div class="label">Difficulty</div>
+      <div class="value orange" id="sDifficulty">—</div>
+    </div>
+    <div class="stat">
+      <div class="label">Block Reward</div>
+      <div class="value green" id="sReward">—</div>
+    </div>
+  </div>
+
+  <main>
+    <div>
+      <div class="section-title">💰 Wallets</div>
+      <div class="wallets-grid" id="wallets"><div class="empty">Loading...</div></div>
+    </div>
+    <div>
+      <div class="section-title">📦 Blocks</div>
+      <div class="blocks-list" id="blocks"><div class="empty">Loading...</div></div>
+    </div>
+  </main>
+
+  <script>
+    const AVATARS = ['🦊','🐺','🐻','🦁','🐯','🦝','🐼','🦄','🐸','🐙'];
+    let avatarMap = {};
+
+    function avatar(name) {
+      if (!avatarMap[name]) {
+        const idx = Object.keys(avatarMap).length % AVATARS.length;
+        avatarMap[name] = AVATARS[idx];
+      }
+      return avatarMap[name];
+    }
+
+    function shortHash(h) {
+      if (!h || h === '0') return '0';
+      return h.slice(0, 10) + '…' + h.slice(-6);
+    }
+
+    function shortAddr(a) {
+      if (!a) return '??';
+      return a.slice(0, 8) + '…' + a.slice(-5);
+    }
+
+    function formatHash(h) {
+      if (!h || h === '0') return '<span class="rest">0</span>';
+      const m = h.match(/^(0+)(.*)$/);
+      if (m) return `<span class="zeros">${m[1]}</span><span class="rest">${m[2].slice(0,18)}…</span>`;
+      return `<span class="rest">${h.slice(0,24)}…</span>`;
+    }
+
+    function timeAgo(isoStr) {
+      const d = new Date(isoStr);
+      const s = Math.floor((Date.now() - d) / 1000);
+      if (s < 5) return 'just now';
+      if (s < 60) return `${s}s ago`;
+      if (s < 3600) return `${Math.floor(s/60)}m ago`;
+      if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+      return d.toLocaleDateString('en');
+    }
+
+    async function loadInfo() {
+      const d = await fetch('/api/info').then(r => r.json());
+      document.getElementById('sHeight').textContent = d.height;
+      const el = document.getElementById('sValid');
+      el.textContent = d.valid ? '✓ Valid' : '✗ Invalid';
+      el.className = 'value ' + (d.valid ? 'green' : 'red');
+      document.getElementById('sDifficulty').textContent = d.difficulty + ' zeros';
+      document.getElementById('sReward').textContent = d.blockReward + ' coins';
+    }
+
+    async function loadWallets() {
+      const wallets = await fetch('/api/wallets').then(r => r.json());
+      const el = document.getElementById('wallets');
+      if (!wallets || wallets.length === 0) {
+        el.innerHTML = '<div class="empty">No wallets found</div>';
+        return;
+      }
+      el.innerHTML = wallets.map(w => `
+        <div class="wallet-card">
+          <div class="wallet-top">
+            <div class="wallet-avatar">${avatar(w.name)}</div>
+            <div class="wallet-name">${w.name}</div>
+          </div>
+          <div class="wallet-addr">${w.address}</div>
+          <div class="wallet-balance">${w.balance.toFixed(1)}<span>coins</span></div>
+        </div>
+      `).join('');
+    }
+
+    const openBlocks = new Set();
+
+    async function loadBlocks() {
+      const blocks = await fetch('/api/blocks').then(r => r.json());
+      const el = document.getElementById('blocks');
+      if (!blocks || blocks.length === 0) {
+        el.innerHTML = '<div class="empty">No blocks found</div>';
+        return;
+      }
+      el.innerHTML = [...blocks].reverse().map(b => {
+        const isGenesis = b.index === 0;
+        const txsHtml = (b.transactions || []).map(tx => {
+          const type = tx.type || 'transfer';
+          const label = type === 'coinbase' ? 'Coinbase' : type === 'data' ? 'Data' : 'Transfer';
+          const outsHtml = (tx.outputs || []).map(o => `
+            <div class="tx-output">
+              <span class="amt">+${o.amount}</span>
+              <span class="arrow">→</span>
+              <span class="addr" title="${o.address}">${shortAddr(o.address)}</span>
+            </div>
+          `).join('');
+          const dataHtml = tx.data ? `<div class="tx-data-box">💬 ${tx.data}</div>` : '';
+          return `
+            <div class="tx-item">
+              <div class="tx-header">
+                <span class="tx-badge ${type}">${label}</span>
+                <span class="tx-id">${tx.id ? shortHash(tx.id) : '—'}</span>
+              </div>
+              <div class="tx-outputs">${outsHtml}</div>
+              ${dataHtml}
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="block-card">
+            <div class="block-header" onclick="toggle(this)">
+              <span class="block-index ${isGenesis ? 'genesis' : ''}">#${b.index}</span>
+              <span class="block-hash-display">${formatHash(b.hash)}</span>
+              <div class="block-meta">
+                <span><span class="nonce-val">⛏ ${b.nonce}</span></span>
+                <span><span class="tx-count-val">📋 ${(b.transactions||[]).length} tx</span></span>
+                <span><span class="time-val">${timeAgo(b.timestamp)}</span></span>
+              </div>
+              <span class="block-chevron">▶</span>
+            </div>
+            <div class="block-body">
+              <div class="block-hashes">
+                <span>⬅ PREV  ${b.prevHash === '0' ? '0 (genesis)' : b.prevHash}</span>
+                <span>🔑 HASH  ${b.hash}</span>
+              </div>
+              ${txsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      openBlocks.forEach(idx => {
+        const cards = el.querySelectorAll('.block-card');
+        cards.forEach(card => {
+          const indexEl = card.querySelector('.block-index');
+          if (indexEl && indexEl.textContent === `#${idx}`) {
+            card.querySelector('.block-body').classList.add('open');
+            card.querySelector('.block-chevron').classList.add('open');
+          }
+        });
+      });
+    }
+
+    function toggle(header) {
+      const body = header.nextElementSibling;
+      const chevron = header.querySelector('.block-chevron');
+      const idx = parseInt(header.querySelector('.block-index').textContent.slice(1));
+      body.classList.toggle('open');
+      chevron.classList.toggle('open');
+      if (body.classList.contains('open')) openBlocks.add(idx);
+      else openBlocks.delete(idx);
+    }
+
+    let lastUpdate = null;
+
+    function updateBadge() {
+      const el = document.getElementById('refreshBadge');
+      if (!lastUpdate) return;
+      const s = Math.floor((Date.now() - lastUpdate) / 1000);
+      el.textContent = s === 0 ? 'just now' : `${s}s ago`;
+    }
+
+    async function refresh() {
+      await Promise.all([loadInfo(), loadWallets(), loadBlocks()]);
+      lastUpdate = Date.now();
+      updateBadge();
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+    setInterval(updateBadge, 1000);
+  </script>
+</body>
+</html>
