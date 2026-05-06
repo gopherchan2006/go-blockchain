@@ -27,8 +27,14 @@ func main() {
 	fmt.Printf("  Miner: %s\n\n", miner.Address())
 
 	fmt.Println("► Mining genesis block (reward → Alice)...")
-	bc := NewBlockchain(alice.Address())
+	bc, err := NewBlockchain("./blockchain.db", alice.Address())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer bc.Close()
+
 	printBalances(bc, alice, bob, miner)
+	SaveAsJSON(bc, "blockchain.json")
 
 	fmt.Println("► Alice sends Bob 3 coins...")
 	tx1, err := NewTransaction(alice, bob.Address(), 3.0, bc)
@@ -37,7 +43,10 @@ func main() {
 	}
 
 	fmt.Println("► Mining block #1...")
-	bc.AddBlock([]*Transaction{tx1}, miner.Address())
+	_, err = bc.AddBlock([]*Transaction{tx1}, miner.Address())
+	if err != nil {
+		log.Fatal(err)
+	}
 	printBalances(bc, alice, bob, miner)
 
 	fmt.Println("► Bob sends Alice 1 coin...")
@@ -47,7 +56,10 @@ func main() {
 	}
 
 	fmt.Println("► Mining block #2...")
-	bc.AddBlock([]*Transaction{tx2}, miner.Address())
+	_, err = bc.AddBlock([]*Transaction{tx2}, miner.Address())
+	if err != nil {
+		log.Fatal(err)
+	}
 	printBalances(bc, alice, bob, miner)
 
 	fmt.Println("► Validating chain...")
@@ -61,23 +73,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	fmt.Printf("  Message: \"%s\"\n", dataMessage)
 	fmt.Printf("  Message hash: %s\n\n", tx3.Hash())
-	
+
 	fmt.Println("► Mining block #3 with embedded data...")
-	bc.AddBlock([]*Transaction{tx3}, miner.Address())
-	
-	fmt.Printf("  Block data: %s\n", bc.Blocks[3].Transactions[1].Data)
-	fmt.Printf("  This data is now permanently in the blockchain!\n\n")
-
-	fmt.Println("► Simulating attack: tampering with a transaction in block #1...")
-	bc.Blocks[1].Transactions[1].Outputs[0].Amount = 9999
-	bc.Blocks[1].Hash = bc.Blocks[1].CalculateHash()
-
-	if !bc.IsValid() {
-		fmt.Println("  ✓ Attack detected! Chain is invalid — block #2 references the old hash of block #1.\n")
+	block, err := bc.AddBlock([]*Transaction{tx3}, miner.Address())
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	fmt.Printf("  Block data: %s\n", block.Transactions[1].Data)
+	fmt.Printf("  This data is now permanently in the blockchain!\n\n")
 
 	fmt.Println("=== Done ===")
 }
