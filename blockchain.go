@@ -1,6 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/gob"
+	"fmt"
+	"strconv"
+
+	"github.com/syndtr/goleveldb/leveldb"
+)
 
 const (
 	Difficulty  = 3
@@ -8,32 +15,115 @@ const (
 )
 
 type Blockchain struct {
-	Blocks []*Block
+	db     *leveldb.DB
+	height int
 }
 
-func NewBlockchain(minerAddress string) *Blockchain {
-	genesis := NewBlock(0, []*Transaction{NewCoinbaseTx(minerAddress, BlockReward)}, "0")
-	genesis.Mine(Difficulty)
+func NewBlockchain(dbPath string, minerAddress string) (*Blockchain, error) {
+	db, err := leveldb.OpenFile(dbPath, nil)
+	if err != nil {
+		return nil, err
+	}
 
-	return &Blockchain{Blocks: []*Block{genesis}}
+	bc := &Blockchain{
+		db:     db,
+		height: -1,
+	}
+
+	exists, err := db.Has([]byte("height"), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		genesis := NewBlock(0, []*Transaction{NewCoinbaseTx(minerAddress, BlockReward)}, "0")
+		genesis.Mine(Difficulty)
+		err = bc.saveBlock(genesis)
+		if err != nil {
+			return nil, err
+		}
+		bc.height = 0
+	} else {
+		heightData, err := db.Get([]byte("height"), nil)
+		if err != nil {
+			return nil, err
+		}
+		h, err := strconv.Atoi(string(heightData))
+		if err != nil {
+			return nil, err
+		}
+		bc.height = h
+	}
+
+	return bc, nil
 }
 
-func (bc *Blockchain) AddBlock(txs []*Transaction, minerAddress string) *Block {
+func (bc *Blockchain) saveBlock(block *Block) error {
+	key := []byte(fmt.Sprintf("block:%d", block.Index))
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(block)
+	if err != nil {
+		return err
+	}
+	err = bc.db.Put(key, buf.Bytes(), nil)
+	if err != nil {
+		return err
+	}
+	return bc.db.Put([]byte("height"), []byte(strconv.Itoa(block.Index)), nil)
+}
+
+func (bc *Blockchain) getBlock(index int) (*Block, error) {
+	key := []byte(fmt.Sprintf("block:%d", index))
+	data, err := bc.db.Get(key, nil)
+	if err != nil {
+		return nil, err
+	}
+	var block Block
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	err = dec.Decode(&block)
+	return &block, err
+}
+
+func (bc *Blockchain) Close() error {
+	return bc.db.Close()
+}
+
+func (bc *Blockchain) AddBlock(txs []*Transaction, minerAddress string) (*Block, error) {
 	coinbase := NewCoinbaseTx(minerAddress, BlockReward)
 	txs = append([]*Transaction{coinbase}, txs...)
 
-	prev := bc.Blocks[len(bc.Blocks)-1]
-	block := NewBlock(prev.Index+1, txs, prev.Hash)
+	prevBlock, err := bc.getBlock(bc.height)
+	if err != nil {
+		return nil, err
+	}
+
+	block := NewBlock(prevBlock.Index+1, txs, prevBlock.Hash)
 	block.Mine(Difficulty)
 
-	bc.Blocks = append(bc.Blocks, block)
-	return block
+	err = bc.saveBlock(block)
+	if err != nil {
+		return nil, err
+	}
+	bc.height = block.Index
+
+	return block, nil
 }
 
 func (bc *Blockchain) IsValid() bool {
-	for i := 1; i < len(bc.Blocks); i++ {
-		prev := bc.Blocks[i-1]
-		curr := bc.Blocks[i]
+	for i := 1; i <= bc.height; i++ {
+		curr, err := bc.getBlock(i)
+		if err != nil {
+			fmt.Printf("  ✗ Error reading block #%d!\n", i)
+			return false
+		}
+
+		prev, err := bc.getBlock(i - 1)
+		if err != nil {
+			fmt.Printf("  ✗ Error reading block #%d!\n", i-1)
+			return false
+		}
+
 		if !curr.IsValid(prev.Hash, Difficulty) {
 			fmt.Printf("  ✗ Block #%d is invalid!\n", curr.Index)
 			return false
@@ -55,13 +145,18 @@ func (bc *Blockchain) FindUTXOs(address string) []TxOutput {
 	var utxos []TxOutput
 	spent := bc.spentOutputs(address)
 
-	for _, block := range bc.Blocks {
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+
 		for _, tx := range block.Transactions {
-			for i, out := range tx.Outputs {
+			for j, out := range tx.Outputs {
 				if out.Address != address {
 					continue
 				}
-				if !spent[tx.ID][i] {
+				if !spent[tx.ID][j] {
 					utxos = append(utxos, out)
 				}
 			}
@@ -75,13 +170,18 @@ func (bc *Blockchain) FindSpendableUTXOs(address string, amount float64) (map[st
 	spent := bc.spentOutputs(address)
 	total := 0.0
 
-	for _, block := range bc.Blocks {
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+
 		for _, tx := range block.Transactions {
-			for i, out := range tx.Outputs {
-				if out.Address != address || spent[tx.ID][i] {
+			for j, out := range tx.Outputs {
+				if out.Address != address || spent[tx.ID][j] {
 					continue
 				}
-				unspent[tx.ID] = append(unspent[tx.ID], i)
+				unspent[tx.ID] = append(unspent[tx.ID], j)
 				total += out.Amount
 				if total >= amount {
 					return unspent, total
@@ -95,23 +195,31 @@ func (bc *Blockchain) FindSpendableUTXOs(address string, amount float64) (map[st
 func (bc *Blockchain) spentOutputs(address string) map[string]map[int]bool {
 	spent := make(map[string]map[int]bool)
 
-	for _, block := range bc.Blocks {
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+
 		for _, tx := range block.Transactions {
 			if tx.IsCoinbase() {
 				continue
 			}
-			for _, in := range tx.Inputs {
-				if len(in.PubKey) >= 64 {
-					addr := pubKeyToAddress(in.PubKey)
-					if addr == address {
-						if spent[in.TxID] == nil {
-							spent[in.TxID] = make(map[int]bool)
-						}
-						spent[in.TxID][in.OutIndex] = true
+
+			for _, input := range tx.Inputs {
+				if input.TxID == "" {
+					continue
+				}
+				inAddress := pubKeyToAddress(input.PubKey)
+				if inAddress == address {
+					if spent[input.TxID] == nil {
+						spent[input.TxID] = make(map[int]bool)
 					}
+					spent[input.TxID][input.OutIndex] = true
 				}
 			}
 		}
 	}
+
 	return spent
 }
