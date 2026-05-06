@@ -51,6 +51,33 @@ type infoDTO struct {
 	BlockReward float64 `json:"blockReward"`
 }
 
+func blockToDTO(b *Block) blockDTO {
+	dto := blockDTO{
+		Index:     b.Index,
+		Hash:      b.Hash,
+		PrevHash:  b.PrevHash,
+		Nonce:     b.Nonce,
+		Timestamp: time.Unix(0, b.Timestamp),
+	}
+	for _, tx := range b.Transactions {
+		txType := "transfer"
+		if tx.IsCoinbase() {
+			txType = "coinbase"
+		} else if tx.Data != "" {
+			txType = "data"
+		}
+		t := txDTO{ID: tx.ID, Type: txType, Data: tx.Data}
+		for _, in := range tx.Inputs {
+			t.Inputs = append(t.Inputs, inputDTO{TxID: in.TxID, OutIndex: in.OutIndex})
+		}
+		for _, out := range tx.Outputs {
+			t.Outputs = append(t.Outputs, outputDTO{Address: out.Address, Amount: out.Amount})
+		}
+		dto.Transactions = append(dto.Transactions, t)
+	}
+	return dto
+}
+
 func RunExplorer(bcPath, walletsPath string, port int) error {
 	bc, err := OpenBlockchain(bcPath)
 	if err != nil {
@@ -84,30 +111,7 @@ func RunExplorer(bcPath, walletsPath string, port int) error {
 			if err != nil {
 				continue
 			}
-			dto := blockDTO{
-				Index:     b.Index,
-				Hash:      b.Hash,
-				PrevHash:  b.PrevHash,
-				Nonce:     b.Nonce,
-				Timestamp: time.Unix(0, b.Timestamp),
-			}
-			for _, tx := range b.Transactions {
-				txType := "transfer"
-				if tx.IsCoinbase() {
-					txType = "coinbase"
-				} else if tx.Data != "" {
-					txType = "data"
-				}
-				t := txDTO{ID: tx.ID, Type: txType, Data: tx.Data}
-				for _, in := range tx.Inputs {
-					t.Inputs = append(t.Inputs, inputDTO{TxID: in.TxID, OutIndex: in.OutIndex})
-				}
-				for _, out := range tx.Outputs {
-					t.Outputs = append(t.Outputs, outputDTO{Address: out.Address, Amount: out.Amount})
-				}
-				dto.Transactions = append(dto.Transactions, t)
-			}
-			blocks = append(blocks, dto)
+			blocks = append(blocks, blockToDTO(b))
 		}
 		json.NewEncoder(w).Encode(blocks)
 	})
