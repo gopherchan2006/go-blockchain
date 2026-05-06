@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "explore" {
+	if len(os.Args) > 1 && (os.Args[1] == "explore" || os.Args[1] == "explorer") {
 		fmt.Println("=== GoChain Explorer ===")
 		if err := RunExplorer("./blockchain.db", "./wallets.db", 3030); err != nil {
 			log.Fatal(err)
