@@ -102,8 +102,8 @@ func (tx *Transaction) dataToSign() string {
 	return data
 }
 
-func NewCoinbaseTx(toAddress string, reward float64) *Transaction {
-	input := TxInput{TxID: "", OutIndex: -1}
+func NewCoinbaseTx(toAddress string, reward float64, height int) *Transaction {
+	input := TxInput{TxID: "", OutIndex: -1, Signature: []byte(fmt.Sprintf("%d", height))}
 	output := TxOutput{Amount: reward, Address: toAddress}
 
 	tx := &Transaction{

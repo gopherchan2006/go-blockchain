@@ -36,7 +36,7 @@ func NewBlockchain(dbPath string, minerAddress string) (*Blockchain, error) {
 	}
 
 	if !exists {
-		genesis := NewBlock(0, []*Transaction{NewCoinbaseTx(minerAddress, BlockReward)}, "0")
+		genesis := NewBlock(0, []*Transaction{NewCoinbaseTx(minerAddress, BlockReward, 0)}, "0")
 		genesis.Mine(Difficulty)
 		err = bc.saveBlock(genesis)
 		if err != nil {
@@ -94,7 +94,8 @@ func (bc *Blockchain) Height() int {
 }
 
 func (bc *Blockchain) NewBlockTemplate(minerAddress string, txs []*Transaction) (*Block, error) {
-	coinbase := NewCoinbaseTx(minerAddress, BlockReward)
+	nextHeight := bc.height + 1
+	coinbase := NewCoinbaseTx(minerAddress, BlockReward, nextHeight)
 	all := append([]*Transaction{coinbase}, txs...)
 	prevBlock, err := bc.getBlock(bc.height)
 	if err != nil {
@@ -151,7 +152,7 @@ func OpenBlockchain(dbPath string) (*Blockchain, error) {
 }
 
 func (bc *Blockchain) AddBlock(txs []*Transaction, minerAddress string) (*Block, error) {
-	coinbase := NewCoinbaseTx(minerAddress, BlockReward)
+	coinbase := NewCoinbaseTx(minerAddress, BlockReward, bc.height+1)
 	txs = append([]*Transaction{coinbase}, txs...)
 
 	prevBlock, err := bc.getBlock(bc.height)
