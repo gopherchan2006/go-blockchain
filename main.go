@@ -15,6 +15,14 @@ func main() {
 		return
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "node" {
+		fmt.Println("=== GoChain Node ===")
+		if err := RunNode("./blockchain.db", "./wallets.db", 3030); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	fmt.Println("=== Blockchain Demo ===")
 
 	fmt.Println("\n► Loading wallets...")
