@@ -5,3 +5,4 @@ go-blockchain.exe
 *.json
 docs
 blockchain.db
+wallets.db
