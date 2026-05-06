@@ -4,3 +4,4 @@ go-blockchain.exe
 *.html
 *.json
 docs
+blockchain.db
