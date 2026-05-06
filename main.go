@@ -3,21 +3,36 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "explore" {
+		fmt.Println("=== GoChain Explorer ===")
+		if err := RunExplorer("./blockchain.db", "./wallets.db", 3030); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	fmt.Println("=== Blockchain Demo ===")
 
-	fmt.Println("\n► Creating wallets...")
-	alice, err := NewWallet()
+	fmt.Println("\n► Loading wallets...")
+	wm, err := NewWalletManager("./wallets.db")
 	if err != nil {
 		log.Fatal(err)
 	}
-	bob, err := NewWallet()
+	defer wm.Close()
+
+	alice, err := wm.GetOrCreate("alice", "demo")
 	if err != nil {
 		log.Fatal(err)
 	}
-	miner, err := NewWallet()
+	bob, err := wm.GetOrCreate("bob", "demo")
+	if err != nil {
+		log.Fatal(err)
+	}
+	miner, err := wm.GetOrCreate("miner", "demo")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -34,7 +49,6 @@ func main() {
 	defer bc.Close()
 
 	printBalances(bc, alice, bob, miner)
-	SaveAsJSON(bc, "blockchain.json")
 
 	fmt.Println("► Alice sends Bob 3 coins...")
 	tx1, err := NewTransaction(alice, bob.Address(), 3.0, bc)
