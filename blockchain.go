@@ -93,6 +93,34 @@ func (bc *Blockchain) Height() int {
 	return bc.height
 }
 
+func (bc *Blockchain) NewBlockTemplate(minerAddress string, txs []*Transaction) (*Block, error) {
+	coinbase := NewCoinbaseTx(minerAddress, BlockReward)
+	all := append([]*Transaction{coinbase}, txs...)
+	prevBlock, err := bc.getBlock(bc.height)
+	if err != nil {
+		return nil, err
+	}
+	return NewBlock(prevBlock.Index+1, all, prevBlock.Hash), nil
+}
+
+func (bc *Blockchain) SubmitBlock(block *Block) error {
+	prevBlock, err := bc.getBlock(bc.height)
+	if err != nil {
+		return err
+	}
+	if block.Index != bc.height+1 {
+		return fmt.Errorf("stale block: expected index %d, got %d", bc.height+1, block.Index)
+	}
+	if !block.IsValid(prevBlock.Hash, Difficulty) {
+		return fmt.Errorf("invalid block")
+	}
+	if err := bc.saveBlock(block); err != nil {
+		return err
+	}
+	bc.height = block.Index
+	return nil
+}
+
 func OpenBlockchain(dbPath string) (*Blockchain, error) {
 	db, err := leveldb.OpenFile(dbPath, nil)
 	if err != nil {
