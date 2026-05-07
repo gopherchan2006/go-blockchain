@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -143,26 +144,63 @@ func RunNode(bcPath, walletsPath string, port int) error {
 		}
 		node.mu.Lock()
 		defer node.mu.Unlock()
-		spent := node.bc.spentOutputs(address)
-		var utxos []utxoDTO
-		for i := 0; i <= node.bc.Height(); i++ {
-			block, err := node.bc.getBlock(i)
-			if err != nil {
-				continue
-			}
-			for _, tx := range block.Transactions {
-				for j, out := range tx.Outputs {
-					if out.Address == address && !spent[tx.ID][j] {
-						utxos = append(utxos, utxoDTO{TxID: tx.ID, OutIndex: j, Amount: out.Amount})
-					}
-				}
-			}
-		}
-		if utxos == nil {
-			utxos = []utxoDTO{}
+		refs, _ := node.bc.FindSpendableUTXOsWithMempool(address, 1e18, node.mempool)
+		utxos := make([]utxoDTO, 0, len(refs))
+		for _, r := range refs {
+			utxos = append(utxos, utxoDTO{TxID: r.TxID, OutIndex: r.OutIndex, Amount: r.Amount})
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(utxos)
+	})
+
+	mux.HandleFunc("/api/transaction/prepare", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			From   string  `json:"from"`
+			To     string  `json:"to"`
+			Amount float64 `json:"amount"`
+			Fee    float64 `json:"fee"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if req.Amount <= 0 {
+			http.Error(w, "amount must be positive", http.StatusBadRequest)
+			return
+		}
+		if req.Fee < 0 {
+			req.Fee = 0
+		}
+		need := req.Amount + req.Fee
+		node.mu.Lock()
+		defer node.mu.Unlock()
+		refs, total := node.bc.FindSpendableUTXOsWithMempool(req.From, need, node.mempool)
+		if total < need {
+			http.Error(w, fmt.Sprintf("insufficient funds: need %.8f, available %.8f", need, total), http.StatusBadRequest)
+			return
+		}
+		inputs := make([]TxInput, len(refs))
+		for i, ref := range refs {
+			inputs[i] = TxInput{TxID: ref.TxID, OutIndex: ref.OutIndex}
+		}
+		outputs := []TxOutput{{Amount: req.Amount, Address: req.To}}
+		change := math.Round((total-need)*1e8) / 1e8
+		if change > 0 {
+			outputs = append(outputs, TxOutput{Amount: change, Address: req.From})
+		}
+		tx := &Transaction{Inputs: inputs, Outputs: outputs, Fee: req.Fee}
+		dataToSign := tx.dataToSign()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(struct {
+			Inputs     []TxInput  `json:"inputs"`
+			Outputs    []TxOutput `json:"outputs"`
+			Fee        float64    `json:"fee"`
+			DataToSign string     `json:"dataToSign"`
+		}{inputs, outputs, req.Fee, dataToSign})
 	})
 
 	mux.HandleFunc("/api/wallet/export", func(w http.ResponseWriter, r *http.Request) {
