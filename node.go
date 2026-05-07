@@ -209,6 +209,7 @@ func RunNode(bcPath, walletsPath string, port int) error {
 			http.Error(w, "invalid transaction signature", http.StatusBadRequest)
 			return
 		}
+		tx.ID = tx.Hash()
 		node.mempool.Add(&tx)
 		node.hub.Broadcast("new_tx", tx.ID)
 		w.WriteHeader(http.StatusAccepted)
