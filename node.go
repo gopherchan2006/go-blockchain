@@ -22,6 +22,7 @@ type blockTemplateDTO struct {
 	Index      int    `json:"index"`
 	Timestamp  int64  `json:"timestamp"`
 	TxData     string `json:"txData"`
+	TxIDs      string `json:"txIDs"`
 	PrevHash   string `json:"prevHash"`
 	Difficulty int    `json:"difficulty"`
 }
@@ -311,12 +312,17 @@ func RunNode(bcPath, walletsPath string, port int) error {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		txIDs := ""
+		for _, tx := range tmpl.Transactions {
+			txIDs += tx.ID
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(blockTemplateDTO{
 			Index:      tmpl.Index,
 			Timestamp:  tmpl.Timestamp,
 			TxData:     string(txDataBytes),
+			TxIDs:      txIDs,
 			PrevHash:   tmpl.PrevHash,
 			Difficulty: Difficulty,
 		})
