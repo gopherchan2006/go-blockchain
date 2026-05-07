@@ -14,6 +14,12 @@ const (
 	BlockReward = 10.0
 )
 
+type utxoRef struct {
+	TxID     string
+	OutIndex int
+	Amount   float64
+}
+
 type Blockchain struct {
 	db     *leveldb.DB
 	height int
@@ -36,7 +42,7 @@ func NewBlockchain(dbPath string, minerAddress string) (*Blockchain, error) {
 	}
 
 	if !exists {
-		genesis := NewBlock(0, []*Transaction{NewCoinbaseTx(minerAddress, BlockReward, 0)}, "0")
+		genesis := NewBlock(0, []*Transaction{NewCoinbaseTx(minerAddress, BlockReward, 0, 0)}, "0")
 		genesis.Mine(Difficulty)
 		err = bc.saveBlock(genesis)
 		if err != nil {
@@ -93,9 +99,19 @@ func (bc *Blockchain) Height() int {
 	return bc.height
 }
 
+func sumFees(txs []*Transaction) float64 {
+	total := 0.0
+	for _, tx := range txs {
+		if !tx.IsCoinbase() {
+			total += tx.Fee
+		}
+	}
+	return total
+}
+
 func (bc *Blockchain) NewBlockTemplate(minerAddress string, txs []*Transaction) (*Block, error) {
 	nextHeight := bc.height + 1
-	coinbase := NewCoinbaseTx(minerAddress, BlockReward, nextHeight)
+	coinbase := NewCoinbaseTx(minerAddress, BlockReward, nextHeight, sumFees(txs))
 	all := append([]*Transaction{coinbase}, txs...)
 	prevBlock, err := bc.getBlock(bc.height)
 	if err != nil {
@@ -175,7 +191,7 @@ func OpenBlockchain(dbPath string) (*Blockchain, error) {
 }
 
 func (bc *Blockchain) AddBlock(txs []*Transaction, minerAddress string) (*Block, error) {
-	coinbase := NewCoinbaseTx(minerAddress, BlockReward, bc.height+1)
+	coinbase := NewCoinbaseTx(minerAddress, BlockReward, bc.height+1, sumFees(txs))
 	txs = append([]*Transaction{coinbase}, txs...)
 
 	prevBlock, err := bc.getBlock(bc.height)
@@ -332,4 +348,79 @@ func (bc *Blockchain) spentOutputs(address string) map[string]map[int]bool {
 	}
 
 	return spent
+}
+
+func (bc *Blockchain) GetOutputAmount(txID string, outIndex int) float64 {
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+		for _, tx := range block.Transactions {
+			if tx.ID == txID && outIndex < len(tx.Outputs) {
+				return tx.Outputs[outIndex].Amount
+			}
+		}
+	}
+	return 0
+}
+
+func (bc *Blockchain) FindSpendableUTXOsWithMempool(address string, amount float64, mp *Mempool) ([]utxoRef, float64) {
+	chainSpent := bc.spentOutputs(address)
+	mempoolTxs := mp.Peek()
+
+	mempoolSpent := make(map[string]map[int]bool)
+	for _, tx := range mempoolTxs {
+		for _, in := range tx.Inputs {
+			if pubKeyToAddress(in.PubKey) == address {
+				if mempoolSpent[in.TxID] == nil {
+					mempoolSpent[in.TxID] = make(map[int]bool)
+				}
+				mempoolSpent[in.TxID][in.OutIndex] = true
+			}
+		}
+	}
+
+	var refs []utxoRef
+	total := 0.0
+
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+		for _, tx := range block.Transactions {
+			for j, out := range tx.Outputs {
+				if out.Address != address {
+					continue
+				}
+				if chainSpent[tx.ID][j] || mempoolSpent[tx.ID][j] {
+					continue
+				}
+				refs = append(refs, utxoRef{TxID: tx.ID, OutIndex: j, Amount: out.Amount})
+				total += out.Amount
+				if total >= amount {
+					return refs, total
+				}
+			}
+		}
+	}
+
+	for _, tx := range mempoolTxs {
+		for j, out := range tx.Outputs {
+			if out.Address != address && mempoolSpent[tx.ID][j] {
+				continue
+			}
+			if out.Address != address {
+				continue
+			}
+			refs = append(refs, utxoRef{TxID: tx.ID, OutIndex: j, Amount: out.Amount})
+			total += out.Amount
+			if total >= amount {
+				return refs, total
+			}
+		}
+	}
+
+	return refs, total
 }

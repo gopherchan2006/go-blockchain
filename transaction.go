@@ -25,7 +25,8 @@ type Transaction struct {
 	ID      string
 	Inputs  []TxInput
 	Outputs []TxOutput
-	Data    string // Arbitrary data stored on-chain (text, JSON, etc)
+	Data    string
+	Fee     float64
 }
 
 func (tx *Transaction) IsCoinbase() bool {
@@ -33,7 +34,7 @@ func (tx *Transaction) IsCoinbase() bool {
 }
 
 func (tx *Transaction) Hash() string {
-	data := fmt.Sprintf("%v%v%s", tx.Inputs, tx.Outputs, tx.Data)
+	data := fmt.Sprintf("%v%v%s%.8f", tx.Inputs, tx.Outputs, tx.Data, tx.Fee)
 	h := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(h[:])
 }
@@ -102,9 +103,9 @@ func (tx *Transaction) dataToSign() string {
 	return data
 }
 
-func NewCoinbaseTx(toAddress string, reward float64, height int) *Transaction {
+func NewCoinbaseTx(toAddress string, reward float64, height int, fees float64) *Transaction {
 	input := TxInput{TxID: "", OutIndex: -1, Signature: []byte(fmt.Sprintf("%d", height))}
-	output := TxOutput{Amount: reward, Address: toAddress}
+	output := TxOutput{Amount: reward + fees, Address: toAddress}
 
 	tx := &Transaction{
 		Inputs:  []TxInput{input},
