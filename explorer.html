@@ -251,6 +251,81 @@
       .bmeta { display: none; }
       .overview-grid { grid-template-columns: 1fr; }
     }
+
+    /* ── WALLET UNLOCK / SEND ── */
+    .btn-unlock {
+      background: none; border: 1px solid var(--border); border-radius: 5px;
+      color: var(--muted); cursor: pointer; padding: 3px 8px; font-size: 11px;
+      margin-left: auto; transition: border-color .15s, color .15s;
+    }
+    .btn-unlock:hover { border-color: var(--yellow); color: var(--yellow); }
+    .btn-send {
+      background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.3);
+      border-radius: 5px; color: var(--green); cursor: pointer; padding: 3px 10px;
+      font-size: 11px; margin-left: auto; transition: background .15s;
+    }
+    .btn-send:hover { background: rgba(63,185,80,.2); }
+    .wcard-unlocked { border-color: rgba(63,185,80,.35); }
+    .unlock-form { display: flex; gap: 6px; margin-bottom: 10px; }
+    .pw-input {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
+      color: var(--text); font-size: 11px; padding: 4px 8px; flex: 1; outline: none;
+    }
+    .pw-input:focus { border-color: var(--blue); }
+    .btn-sm {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
+      color: var(--text); cursor: pointer; font-size: 11px; padding: 4px 10px;
+    }
+    .btn-sm:hover { border-color: var(--blue); }
+
+    /* ── SEND MODAL ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
+      align-items: center; justify-content: center; z-index: 200;
+    }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; width: 440px; max-width: calc(100vw - 32px);
+    }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      font-weight: 600; font-size: 14px;
+    }
+    .modal-head button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; }
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .form-row { display: flex; flex-direction: column; gap: 5px; }
+    .form-row label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--muted);
+    }
+    .form-val {
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 11px;
+      color: var(--muted); background: var(--surface2); padding: 7px 10px;
+      border-radius: 6px; word-break: break-all;
+    }
+    .form-input {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 13px; padding: 8px 12px; outline: none;
+      font-family: 'SF Mono','Fira Code',monospace;
+    }
+    .form-input:focus { border-color: var(--blue); }
+    .send-status { font-size: 12px; min-height: 18px; }
+    .send-status.ok { color: var(--green); }
+    .send-status.err { color: var(--red); }
+    .modal-foot {
+      display: flex; justify-content: flex-end; gap: 10px;
+      padding: 14px 20px; border-top: 1px solid var(--border);
+    }
+    .btn-cancel {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); cursor: pointer; font-size: 13px; padding: 7px 16px;
+    }
+    .btn-primary {
+      background: var(--green); border: none; border-radius: 6px;
+      color: #000; cursor: pointer; font-size: 13px; font-weight: 600; padding: 7px 18px;
+    }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -352,6 +427,7 @@
 // ── STATE ─────────────────────────────────────
 const EMOJIS = ['🦊','🐺','🐻','🦁','🐯','🦝','🐼','🦄','🐸','🐙'];
 let blocks = [], wallets = [], openSet = new Set(), q = '', evCount = 0;
+const unlockedWallets = {};
 let emap = {}, sseConnected = false;
 
 // ── TABS ──────────────────────────────────────
@@ -365,6 +441,139 @@ document.getElementById('tabNav').addEventListener('click', e => {
 });
 
 // ── UTILS ─────────────────────────────────────
+function escQ(s) { return s.replace(/'/g, "\\'"); }
+function hexToBytes(hex) {
+  const a = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < a.length; i++) a[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return a;
+}
+function bytesToBase64(bytes) {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+function bytesToBase64url(bytes) {
+  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// ── UNLOCK ────────────────────────────────────
+function toggleUnlock(name, address) {
+  const form = document.getElementById('uf-' + address);
+  if (!form) return;
+  const visible = form.style.display !== 'none';
+  form.style.display = visible ? 'none' : 'flex';
+  if (!visible) setTimeout(() => { const el = document.getElementById('pw-' + address); if (el) el.focus(); }, 30);
+}
+
+async function submitUnlock(name, address) {
+  const el = document.getElementById('pw-' + address);
+  if (!el) return;
+  const password = el.value;
+  if (!password) return;
+  try {
+    const resp = await fetch('/api/wallet/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password })
+    });
+    if (!resp.ok) { el.value = ''; el.placeholder = 'wrong password'; return; }
+    const { privateKey, publicKey } = await resp.json();
+    const dBytes = hexToBytes(privateKey);
+    const pkBytes = hexToBytes(publicKey);
+    const jwk = {
+      kty: 'EC', crv: 'P-256',
+      d: bytesToBase64url(dBytes),
+      x: bytesToBase64url(pkBytes.slice(0, 32)),
+      y: bytesToBase64url(pkBytes.slice(32, 64))
+    };
+    const cryptoKey = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+    unlockedWallets[address] = { cryptoKey, publicKey };
+    renderWallets();
+  } catch (e) {
+    el.value = '';
+    el.placeholder = 'error: ' + e.message;
+  }
+}
+
+// ── SEND MODAL ────────────────────────────────
+let sendFromAddress = '';
+
+function openSendModal(address) {
+  sendFromAddress = address;
+  document.getElementById('sendFrom').textContent = address;
+  document.getElementById('sendTo').value = '';
+  document.getElementById('sendAmt').value = '';
+  const st = document.getElementById('sendStatus');
+  st.textContent = ''; st.className = 'send-status';
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('sendModal').style.display = 'flex';
+}
+
+function closeSendModal() {
+  document.getElementById('sendModal').style.display = 'none';
+}
+
+async function submitSendModal() {
+  const toAddress = document.getElementById('sendTo').value.trim();
+  const amount = parseFloat(document.getElementById('sendAmt').value);
+  const st = document.getElementById('sendStatus');
+  const btn = document.getElementById('sendBtn');
+  if (!toAddress || isNaN(amount) || amount <= 0) {
+    st.textContent = 'Enter a valid address and amount.';
+    st.className = 'send-status err';
+    return;
+  }
+  btn.disabled = true;
+  st.textContent = 'Signing and sending\u2026';
+  st.className = 'send-status';
+  try {
+    await sendTx(sendFromAddress, toAddress, amount);
+    st.textContent = 'Transaction submitted!';
+    st.className = 'send-status ok';
+    setTimeout(() => { closeSendModal(); loadAll(false); }, 1500);
+  } catch (e) {
+    st.textContent = e.message;
+    st.className = 'send-status err';
+    btn.disabled = false;
+  }
+}
+
+async function sendTx(fromAddress, toAddress, amount) {
+  const wallet = unlockedWallets[fromAddress];
+  if (!wallet) throw new Error('Wallet not unlocked');
+  const utxos = await fetch('/api/utxos?address=' + fromAddress).then(r => r.json());
+  let total = 0;
+  const selected = [];
+  for (const u of utxos) {
+    selected.push(u);
+    total += u.amount;
+    if (total >= amount) break;
+  }
+  if (total < amount) throw new Error('Insufficient funds: have ' + total.toFixed(8) + ', need ' + amount);
+  const inputs = selected.map(u => ({ TxID: u.txID, OutIndex: u.outIndex, Signature: null, PubKey: null }));
+  const outputs = [{ Amount: amount, Address: toAddress }];
+  const change = Math.round((total - amount) * 1e8) / 1e8;
+  if (change > 0) outputs.push({ Amount: change, Address: fromAddress });
+  let dtSign = '';
+  for (const inp of inputs) dtSign += inp.TxID + inp.OutIndex;
+  for (const out of outputs) dtSign += out.Address + out.Amount.toFixed(8);
+  const sigBuffer = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    wallet.cryptoKey,
+    new TextEncoder().encode(dtSign)
+  );
+  const sigBase64 = bytesToBase64(new Uint8Array(sigBuffer));
+  const pubBase64 = bytesToBase64(hexToBytes(wallet.publicKey));
+  for (const inp of inputs) { inp.Signature = sigBase64; inp.PubKey = pubBase64; }
+  const tx = { ID: '', Inputs: inputs, Outputs: outputs, Data: '' };
+  const resp = await fetch('/api/transaction', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tx)
+  });
+  if (!resp.ok) throw new Error(await resp.text());
+}
+
 function ava(name) {
   if (!emap[name]) emap[name] = EMOJIS[Object.keys(emap).length % EMOJIS.length];
   return emap[name];
@@ -522,16 +731,30 @@ function renderBlocks(prepend) {
 function renderWallets() {
   const filt = q ? wallets.filter(w => w.name.toLowerCase().includes(q) || w.address.toLowerCase().includes(q)) : wallets;
   document.getElementById('bdgWallets').textContent = filt.length;
-  document.getElementById('wgrid').innerHTML = filt.length ? filt.map(w => `
-    <div class="wcard">
+  document.getElementById('wgrid').innerHTML = filt.length ? filt.map(w => {
+    const unlocked = !!unlockedWallets[w.address];
+    const actionBtn = unlocked
+      ? `<button class="btn-send" onclick="openSendModal('${w.address}')">↗ Send</button>`
+      : `<button class="btn-unlock" onclick="toggleUnlock('${escQ(w.name)}','${w.address}')">🔓 Unlock</button>`;
+    const unlockForm = unlocked ? '' : `
+      <div class="unlock-form" id="uf-${w.address}" style="display:none">
+        <input type="password" class="pw-input" id="pw-${w.address}" placeholder="password"
+          onkeydown="if(event.key==='Enter')submitUnlock('${escQ(w.name)}','${w.address}')">
+        <button class="btn-sm" onclick="submitUnlock('${escQ(w.name)}','${w.address}')">Go</button>
+      </div>`;
+    return `
+    <div class="wcard${unlocked?' wcard-unlocked':''}">
       <div class="wtop">
         <div class="wava">${ava(w.name)}</div>
         <div class="wname">${w.name}</div>
+        ${actionBtn}
       </div>
+      ${unlockForm}
       <div class="waddr">${w.address}</div>
       ${hashViz(w.address)}
       <div class="wbal">${w.balance.toFixed(1)}<span>coins</span></div>
-    </div>`).join('')
+    </div>`;
+  }).join('')
   : '<div class="empty">No wallets found</div>';
 }
 
@@ -639,5 +862,33 @@ setTimeout(() => { if (!sseConnected) setInterval(() => loadAll(false), 5000); }
 loadAll(false);
 connectSSE();
 </script>
+
+<div id="sendModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeSendModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <span>Send Transaction</span>
+      <button onclick="closeSendModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>From</label>
+        <div id="sendFrom" class="form-val"></div>
+      </div>
+      <div class="form-row">
+        <label>To Address</label>
+        <input id="sendTo" class="form-input" placeholder="recipient address" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label>Amount</label>
+        <input id="sendAmt" class="form-input" type="number" min="0.00000001" step="0.001" placeholder="0.000">
+      </div>
+      <div id="sendStatus" class="send-status"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeSendModal()">Cancel</button>
+      <button id="sendBtn" class="btn-primary" onclick="submitSendModal()">Send ↗</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
