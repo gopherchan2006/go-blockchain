@@ -41,15 +41,38 @@ type Node struct {
 }
 
 func NewNode(bcPath, walletsPath string) (*Node, error) {
-	bc, err := OpenBlockchain(bcPath)
-	if err != nil {
-		return nil, fmt.Errorf("cannot open blockchain: %w", err)
-	}
 	wm, err := NewWalletManager(walletsPath)
 	if err != nil {
-		bc.Close()
 		return nil, fmt.Errorf("cannot open wallets: %w", err)
 	}
+
+	alice, err := wm.GetOrCreate("alice", "demo")
+	if err != nil {
+		wm.Close()
+		return nil, err
+	}
+
+	bc, err := func() (*Blockchain, error) {
+		bc, err := OpenBlockchain(bcPath)
+		if err == nil {
+			return bc, nil
+		}
+		return NewBlockchain(bcPath, alice.Address())
+	}()
+	if err != nil {
+		wm.Close()
+		return nil, fmt.Errorf("cannot open blockchain: %w", err)
+	}
+
+	if _, err := wm.GetOrCreate("bob", "demo"); err != nil {
+		bc.Close(); wm.Close()
+		return nil, err
+	}
+	if _, err := wm.GetOrCreate("miner", "demo"); err != nil {
+		bc.Close(); wm.Close()
+		return nil, err
+	}
+
 	return &Node{
 		bc:      bc,
 		wm:      wm,
