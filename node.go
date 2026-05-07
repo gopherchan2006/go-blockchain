@@ -1,11 +1,18 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 )
+
+type utxoDTO struct {
+	TxID     string  `json:"txID"`
+	OutIndex int     `json:"outIndex"`
+	Amount   float64 `json:"amount"`
+}
 
 type blockTemplateDTO struct {
 	Index      int    `json:"index"`
@@ -116,6 +123,36 @@ func RunNode(bcPath, walletsPath string, port int) error {
 	mux.HandleFunc("/api/mempool", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(node.mempool.Peek())
+	})
+
+	mux.HandleFunc("/api/utxos", func(w http.ResponseWriter, r *http.Request) {
+		address := r.URL.Query().Get("address")
+		if address == "" {
+			http.Error(w, "address required", http.StatusBadRequest)
+			return
+		}
+		node.mu.Lock()
+		defer node.mu.Unlock()
+		spent := node.bc.spentOutputs(address)
+		var utxos []utxoDTO
+		for i := 0; i <= node.bc.Height(); i++ {
+			block, err := node.bc.getBlock(i)
+			if err != nil {
+				continue
+			}
+			for _, tx := range block.Transactions {
+				for j, out := range tx.Outputs {
+					if out.Address == address && !spent[tx.ID][j] {
+						utxos = append(utxos, utxoDTO{TxID: tx.ID, OutIndex: j, Amount: out.Amount})
+					}
+				}
+			}
+		}
+		if utxos == nil {
+			utxos = []utxoDTO{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(utxos)
 	})
 
 	mux.HandleFunc("/api/transaction", func(w http.ResponseWriter, r *http.Request) {
