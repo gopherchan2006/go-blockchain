@@ -5,3 +5,4 @@ go-blockchain.exe
 docs
 blockchain.db
 wallets.db
+mempool.dat
