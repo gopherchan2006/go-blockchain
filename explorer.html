@@ -326,6 +326,26 @@
       color: #000; cursor: pointer; font-size: 13px; font-weight: 600; padding: 7px 18px;
     }
     .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+    .sec-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .sec-row .sec { margin-bottom: 0; }
+    .btn-create-wallet {
+      background: rgba(88,166,255,.1); border: 1px solid rgba(88,166,255,.3);
+      border-radius: 6px; color: var(--blue); cursor: pointer; font-size: 13px;
+      font-weight: 600; padding: 6px 14px; transition: background .15s;
+    }
+    .btn-create-wallet:hover { background: rgba(88,166,255,.2); }
+    .pk-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px; font-family: 'SF Mono','Fira Code',monospace; font-size: 11px;
+      word-break: break-all; line-height: 1.7; color: var(--yellow); text-align: center;
+      letter-spacing: .5px;
+    }
+    .backup-warn {
+      background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.3);
+      border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--red);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -390,7 +410,10 @@
 <!-- ── WALLETS ── -->
 <div id="tab-wallets" class="tab-content">
   <div class="page">
-    <div class="sec">Wallets</div>
+    <div class="sec-row">
+      <div class="sec">Wallets</div>
+      <button class="btn-create-wallet" onclick="openCreateWallet()">+ New Wallet</button>
+    </div>
     <div class="wgrid" id="wgrid"><div class="empty">Loading…</div></div>
   </div>
 </div>
@@ -497,6 +520,53 @@ async function submitUnlock(name, address) {
 
 // ── SEND MODAL ────────────────────────────────
 let sendFromAddress = '';
+
+// ── CREATE WALLET ────────────────────────────
+function openCreateWallet() {
+  document.getElementById('cwName').value = '';
+  document.getElementById('cwPw').value = '';
+  document.getElementById('cwPw2').value = '';
+  document.getElementById('cwStatus').textContent = '';
+  document.getElementById('cwBtn').disabled = false;
+  document.getElementById('createWalletModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('cwName').focus(), 50);
+}
+function closeCreateWallet() {
+  document.getElementById('createWalletModal').style.display = 'none';
+}
+function closeBackup() {
+  document.getElementById('backupModal').style.display = 'none';
+  loadWallets();
+}
+async function submitCreateWallet() {
+  const name = document.getElementById('cwName').value.trim();
+  const pw = document.getElementById('cwPw').value;
+  const pw2 = document.getElementById('cwPw2').value;
+  const status = document.getElementById('cwStatus');
+  if (!name) { status.textContent = 'Name is required.'; return; }
+  if (!pw) { status.textContent = 'Password is required.'; return; }
+  if (pw !== pw2) { status.textContent = 'Passwords do not match.'; return; }
+  const btn = document.getElementById('cwBtn');
+  btn.disabled = true;
+  status.textContent = '';
+  try {
+    const res = await fetch('/api/wallet/create', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, password: pw})
+    });
+    const text = await res.text();
+    if (!res.ok) { status.textContent = text.trim(); btn.disabled = false; return; }
+    const data = JSON.parse(text);
+    closeCreateWallet();
+    document.getElementById('bkAddress').textContent = data.address;
+    document.getElementById('bkPrivKey').textContent = data.privateKey;
+    document.getElementById('backupModal').style.display = 'flex';
+  } catch (e) {
+    status.textContent = 'Network error.';
+    btn.disabled = false;
+  }
+}
 
 function openSendModal(address) {
   sendFromAddress = address;
@@ -748,7 +818,7 @@ function renderWallets() {
       <div class="wbal">${w.balance.toFixed(1)}<span>coins</span></div>
     </div>`;
   }).join('')
-  : '<div class="empty">No wallets found</div>';
+  : '<div class="empty">No wallets yet. <a href="#" onclick="openCreateWallet();return false" style="color:var(--blue)">Create your first wallet</a></div>';
 }
 
 // ── RENDER MEMPOOL ────────────────────────────
@@ -855,6 +925,57 @@ setTimeout(() => { if (!sseConnected) setInterval(() => loadAll(false), 5000); }
 loadAll(false);
 connectSSE();
 </script>
+
+<div id="createWalletModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeCreateWallet()">
+  <div class="modal">
+    <div class="modal-head">
+      <span>Create New Wallet</span>
+      <button onclick="closeCreateWallet()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Name</label>
+        <input id="cwName" class="form-input" placeholder="e.g. alice" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input id="cwPw" class="form-input" type="password" placeholder="choose a strong password">
+      </div>
+      <div class="form-row">
+        <label>Confirm Password</label>
+        <input id="cwPw2" class="form-input" type="password" placeholder="repeat password">
+      </div>
+      <div id="cwStatus" class="send-status"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeCreateWallet()">Cancel</button>
+      <button id="cwBtn" class="btn-primary" onclick="submitCreateWallet()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="backupModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-head"><span>⚠ Save Your Private Key</span></div>
+    <div class="modal-body">
+      <div class="backup-warn">
+        This is the <strong>only time</strong> your private key will be shown. Write it down or save it somewhere safe. If you lose it, you lose access to this wallet forever.
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <label>Address</label>
+        <div id="bkAddress" class="form-val"></div>
+      </div>
+      <div class="form-row">
+        <label>Private Key (hex)</label>
+        <div id="bkPrivKey" class="pk-box" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center">Click the key to copy it</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary" onclick="closeBackup()">I saved it — Continue</button>
+    </div>
+  </div>
+</div>
 
 <div id="sendModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeSendModal()">
   <div class="modal">
