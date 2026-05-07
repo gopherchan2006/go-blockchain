@@ -503,6 +503,7 @@ function openSendModal(address) {
   document.getElementById('sendFrom').textContent = address;
   document.getElementById('sendTo').value = '';
   document.getElementById('sendAmt').value = '';
+  document.getElementById('sendFee').value = '0.001';
   const st = document.getElementById('sendStatus');
   st.textContent = ''; st.className = 'send-status';
   document.getElementById('sendBtn').disabled = false;
@@ -516,6 +517,7 @@ function closeSendModal() {
 async function submitSendModal() {
   const toAddress = document.getElementById('sendTo').value.trim();
   const amount = parseFloat(document.getElementById('sendAmt').value);
+  const fee = parseFloat(document.getElementById('sendFee').value) || 0;
   const st = document.getElementById('sendStatus');
   const btn = document.getElementById('sendBtn');
   if (!toAddress || isNaN(amount) || amount <= 0) {
@@ -527,7 +529,7 @@ async function submitSendModal() {
   st.textContent = 'Signing and sending\u2026';
   st.className = 'send-status';
   try {
-    await sendTx(sendFromAddress, toAddress, amount);
+    await sendTx(sendFromAddress, toAddress, amount, fee);
     st.textContent = 'Transaction submitted!';
     st.className = 'send-status ok';
     setTimeout(() => { closeSendModal(); loadAll(false); }, 1500);
@@ -538,34 +540,25 @@ async function submitSendModal() {
   }
 }
 
-async function sendTx(fromAddress, toAddress, amount) {
+async function sendTx(fromAddress, toAddress, amount, fee) {
   const wallet = unlockedWallets[fromAddress];
   if (!wallet) throw new Error('Wallet not unlocked');
-  const utxos = await fetch('/api/utxos?address=' + fromAddress).then(r => r.json());
-  let total = 0;
-  const selected = [];
-  for (const u of utxos) {
-    selected.push(u);
-    total += u.amount;
-    if (total >= amount) break;
-  }
-  if (total < amount) throw new Error('Insufficient funds: have ' + total.toFixed(8) + ', need ' + amount);
-  const inputs = selected.map(u => ({ TxID: u.txID, OutIndex: u.outIndex, Signature: null, PubKey: null }));
-  const outputs = [{ Amount: amount, Address: toAddress }];
-  const change = Math.round((total - amount) * 1e8) / 1e8;
-  if (change > 0) outputs.push({ Amount: change, Address: fromAddress });
-  let dtSign = '';
-  for (const inp of inputs) dtSign += inp.TxID + inp.OutIndex;
-  for (const out of outputs) dtSign += out.Address + out.Amount.toFixed(8);
+  const prepared = await fetch('/api/transaction/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: fromAddress, to: toAddress, amount, fee })
+  });
+  if (!prepared.ok) throw new Error(await prepared.text());
+  const { inputs, outputs, fee: actualFee, dataToSign } = await prepared.json();
   const sigBuffer = await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' },
     wallet.cryptoKey,
-    new TextEncoder().encode(dtSign)
+    new TextEncoder().encode(dataToSign)
   );
   const sigBase64 = bytesToBase64(new Uint8Array(sigBuffer));
   const pubBase64 = bytesToBase64(hexToBytes(wallet.publicKey));
   for (const inp of inputs) { inp.Signature = sigBase64; inp.PubKey = pubBase64; }
-  const tx = { ID: '', Inputs: inputs, Outputs: outputs, Data: '' };
+  const tx = { ID: '', Inputs: inputs, Outputs: outputs, Data: '', Fee: actualFee };
   const resp = await fetch('/api/transaction', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -878,9 +871,15 @@ connectSSE();
         <label>To Address</label>
         <input id="sendTo" class="form-input" placeholder="recipient address" autocomplete="off">
       </div>
-      <div class="form-row">
-        <label>Amount</label>
-        <input id="sendAmt" class="form-input" type="number" min="0.00000001" step="0.001" placeholder="0.000">
+      <div style="display:flex;gap:12px">
+        <div class="form-row" style="flex:2">
+          <label>Amount</label>
+          <input id="sendAmt" class="form-input" type="number" min="0.00000001" step="0.001" placeholder="0.000">
+        </div>
+        <div class="form-row" style="flex:1">
+          <label>Fee</label>
+          <input id="sendFee" class="form-input" type="number" min="0" step="0.001" placeholder="0.001" value="0.001">
+        </div>
       </div>
       <div id="sendStatus" class="send-status"></div>
     </div>
