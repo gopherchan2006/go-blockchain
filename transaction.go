@@ -26,7 +26,7 @@ type Transaction struct {
 	Inputs  []TxInput
 	Outputs []TxOutput
 	Data    string
-	Fee     float64
+	Fee     float64 `json:",omitempty"`
 }
 
 func (tx *Transaction) IsCoinbase() bool {
