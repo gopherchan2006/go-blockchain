@@ -41,16 +41,12 @@ type Node struct {
 	template *Block
 }
 
+const genesisAddress = "0000000000000000000000000000000000000000"
+
 func NewNode(bcPath, walletsPath string) (*Node, error) {
 	wm, err := NewWalletManager(walletsPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open wallets: %w", err)
-	}
-
-	alice, err := wm.GetOrCreate("alice", "demo")
-	if err != nil {
-		wm.Close()
-		return nil, err
 	}
 
 	bc, err := func() (*Blockchain, error) {
@@ -58,20 +54,11 @@ func NewNode(bcPath, walletsPath string) (*Node, error) {
 		if err == nil {
 			return bc, nil
 		}
-		return NewBlockchain(bcPath, alice.Address())
+		return NewBlockchain(bcPath, genesisAddress)
 	}()
 	if err != nil {
 		wm.Close()
 		return nil, fmt.Errorf("cannot open blockchain: %w", err)
-	}
-
-	if _, err := wm.GetOrCreate("bob", "demo"); err != nil {
-		bc.Close(); wm.Close()
-		return nil, err
-	}
-	if _, err := wm.GetOrCreate("miner", "demo"); err != nil {
-		bc.Close(); wm.Close()
-		return nil, err
 	}
 
 	return &Node{
@@ -227,6 +214,47 @@ func RunNode(bcPath, walletsPath string, port int) error {
 		}{inputs, outputs, req.Fee, dataToSign})
 	})
 
+	mux.HandleFunc("/api/wallet/create", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name     string `json:"name"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if req.Name == "" || req.Password == "" {
+			http.Error(w, "name and password required", http.StatusBadRequest)
+			return
+		}
+		wallet, err := node.wm.CreateWallet(req.Name, req.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		pad32 := func(b []byte) []byte {
+			if len(b) >= 32 {
+				return b
+			}
+			out := make([]byte, 32)
+			copy(out[32-len(b):], b)
+			return out
+		}
+		d := pad32(wallet.PrivKey.D.Bytes())
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(struct {
+			Address    string `json:"address"`
+			PrivateKey string `json:"privateKey"`
+		}{
+			Address:    wallet.Address(),
+			PrivateKey: fmt.Sprintf("%x", d),
+		})
+	})
+
 	mux.HandleFunc("/api/wallet/export", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -362,6 +390,95 @@ func RunNode(bcPath, walletsPath string, port int) error {
 	})
 
 	mux.HandleFunc("/api/events", node.hub.ServeHTTP)
+
+	if DebugEnabled() {
+		fmt.Println("  Debug mode enabled: http://localhost:3030/debug")
+
+		mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodDelete {
+				dbg.Clear()
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			node.mu.Lock()
+			var tmplInfo any
+			if node.template != nil {
+				txIDs := make([]string, len(node.template.Transactions))
+				for i, tx := range node.template.Transactions {
+					txIDs[i] = tx.ID
+				}
+				tmplInfo = map[string]any{
+					"index":   node.template.Index,
+					"txCount": len(node.template.Transactions),
+					"txIDs":   txIDs,
+					"prevHash": node.template.PrevHash,
+				}
+			}
+			names, _ := node.wm.ListWallets()
+			nodeSnap := map[string]any{
+				"height":      node.bc.Height(),
+				"valid":       node.bc.IsValid(),
+				"mempoolSize": node.mempool.Size(),
+				"walletCount": len(names),
+				"wallets":     names,
+				"template":    tmplInfo,
+			}
+			mempoolTxs := node.mempool.Peek()
+			mempoolSnap := make([]map[string]any, len(mempoolTxs))
+			for i, tx := range mempoolTxs {
+				mempoolSnap[i] = map[string]any{
+					"id":      tx.ID,
+					"fee":     tx.Fee,
+					"inputs":  len(tx.Inputs),
+					"outputs": len(tx.Outputs),
+				}
+			}
+			node.mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"node":    nodeSnap,
+				"mempool": mempoolSnap,
+				"vars":    dbg.snapshot(),
+			})
+		})
+
+		mux.HandleFunc("/debug/push", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req struct {
+				Key   string `json:"key"`
+				Value any    `json:"value"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "invalid JSON", http.StatusBadRequest)
+				return
+			}
+			if req.Key == "" {
+				http.Error(w, "key required", http.StatusBadRequest)
+				return
+			}
+			dbg.Set(req.Key, req.Value)
+			w.WriteHeader(http.StatusNoContent)
+		})
+
+		mux.HandleFunc("/debug/del", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req struct {
+				Key string `json:"key"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "invalid JSON", http.StatusBadRequest)
+				return
+			}
+			dbg.Del(req.Key)
+			w.WriteHeader(http.StatusNoContent)
+		})
+	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
