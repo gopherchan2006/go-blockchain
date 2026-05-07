@@ -154,6 +154,47 @@ func RunNode(bcPath, walletsPath string, port int) error {
 		json.NewEncoder(w).Encode(utxos)
 	})
 
+	mux.HandleFunc("/api/wallet/export", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name     string `json:"name"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		wallet, err := node.wm.LoadWallet(req.Name, req.Password)
+		if err != nil {
+			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			return
+		}
+		pad32 := func(b []byte) []byte {
+			if len(b) >= 32 {
+				return b
+			}
+			out := make([]byte, 32)
+			copy(out[32-len(b):], b)
+			return out
+		}
+		d := pad32(wallet.PrivKey.D.Bytes())
+		x := pad32(wallet.PrivKey.PublicKey.X.Bytes())
+		y := pad32(wallet.PrivKey.PublicKey.Y.Bytes())
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(struct {
+			Address    string `json:"address"`
+			PrivateKey string `json:"privateKey"`
+			PublicKey  string `json:"publicKey"`
+		}{
+			Address:    wallet.Address(),
+			PrivateKey: fmt.Sprintf("%x", d),
+			PublicKey:  fmt.Sprintf("%x%x", x, y),
+		})
+	})
+
 	mux.HandleFunc("/api/transaction", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
