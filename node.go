@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 )
 
 type utxoDTO struct {
@@ -68,6 +72,13 @@ func RunNode(bcPath, walletsPath string, port int) error {
 	}
 	defer node.bc.Close()
 	defer node.wm.Close()
+
+	const mempoolPath = "./mempool.dat"
+	if err := node.mempool.Load(mempoolPath); err != nil {
+		fmt.Printf("  Warning: could not load mempool: %v\n", err)
+	} else if node.mempool.Size() > 0 {
+		fmt.Printf("  Loaded %d pending transactions from mempool.dat\n", node.mempool.Size())
+	}
 
 	mux := http.NewServeMux()
 
@@ -292,5 +303,24 @@ func RunNode(bcPath, walletsPath string, port int) error {
 
 	addr := fmt.Sprintf(":%d", port)
 	fmt.Printf("  Node: http://localhost%s\n", addr)
-	return http.ListenAndServe(addr, mux)
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-quit
+		fmt.Println("\n  Shutting down...")
+		if err := node.mempool.Save(mempoolPath); err != nil {
+			fmt.Printf("  Warning: could not save mempool: %v\n", err)
+		} else {
+			fmt.Printf("  Saved %d pending transactions to mempool.dat\n", node.mempool.Size())
+		}
+		srv.Shutdown(context.Background())
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }

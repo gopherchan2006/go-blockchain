@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 )
 
@@ -55,4 +57,34 @@ func (m *Mempool) Size() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.txs)
+}
+
+func (m *Mempool) Save(path string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(m.txs)
+}
+
+func (m *Mempool) Load(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+	var txs []*Transaction
+	if err := json.NewDecoder(f).Decode(&txs); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.txs = txs
+	return nil
 }
