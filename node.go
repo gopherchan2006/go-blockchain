@@ -210,7 +210,10 @@ func RunNode(bcPath, walletsPath string, port int) error {
 			return
 		}
 		tx.ID = tx.Hash()
-		node.mempool.Add(&tx)
+		if err := node.mempool.Add(&tx); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		node.hub.Broadcast("new_tx", tx.ID)
 		w.WriteHeader(http.StatusAccepted)
 	})

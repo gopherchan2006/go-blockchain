@@ -115,6 +115,29 @@ func (bc *Blockchain) SubmitBlock(block *Block) error {
 	if !block.IsValid(prevBlock.Hash, Difficulty) {
 		return fmt.Errorf("invalid block")
 	}
+	spentInBlock := make(map[string]map[int]bool)
+	for _, tx := range block.Transactions {
+		if tx.IsCoinbase() {
+			continue
+		}
+		for _, in := range tx.Inputs {
+			if spentInBlock[in.TxID] == nil {
+				spentInBlock[in.TxID] = make(map[int]bool)
+			}
+			if spentInBlock[in.TxID][in.OutIndex] {
+				return fmt.Errorf("double spend in block: output %s:%d used twice", in.TxID, in.OutIndex)
+			}
+			spentInBlock[in.TxID][in.OutIndex] = true
+		}
+	}
+	globalSpent := bc.allSpentOutputs()
+	for txID, indices := range spentInBlock {
+		for idx := range indices {
+			if globalSpent[txID][idx] {
+				return fmt.Errorf("double spend: output %s:%d already spent on chain", txID, idx)
+			}
+		}
+	}
 	if err := bc.saveBlock(block); err != nil {
 		return err
 	}
@@ -252,6 +275,31 @@ func (bc *Blockchain) FindSpendableUTXOs(address string, amount float64) (map[st
 		}
 	}
 	return unspent, total
+}
+
+func (bc *Blockchain) allSpentOutputs() map[string]map[int]bool {
+	spent := make(map[string]map[int]bool)
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() {
+				continue
+			}
+			for _, in := range tx.Inputs {
+				if in.TxID == "" {
+					continue
+				}
+				if spent[in.TxID] == nil {
+					spent[in.TxID] = make(map[int]bool)
+				}
+				spent[in.TxID][in.OutIndex] = true
+			}
+		}
+	}
+	return spent
 }
 
 func (bc *Blockchain) spentOutputs(address string) map[string]map[int]bool {
