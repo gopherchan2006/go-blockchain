@@ -414,11 +414,12 @@
   </div>
 </header>
 
-<div class="stats-bar">
+<div class="stats-bar" style="grid-template-columns:repeat(5,1fr)">
   <div class="stat"><div class="lbl">Chain Height</div><div class="val blue"  id="sHeight">—</div></div>
   <div class="stat"><div class="lbl">Status</div>      <div class="val"       id="sValid">—</div></div>
   <div class="stat"><div class="lbl">Difficulty</div>  <div class="val orange" id="sDiff">—</div></div>
   <div class="stat"><div class="lbl">Block Reward</div><div class="val green"  id="sReward">—</div></div>
+  <div class="stat"><div class="lbl">Peers</div><div class="val purple" id="sPeers">—</div></div>
 </div>
 
 <!-- ── OVERVIEW ── -->
@@ -894,6 +895,7 @@ function renderNetStats(info) {
     <div class="row-kv"><span class="kv-k">Height</span><span class="kv-v blue">${info.height}</span></div>
     <div class="row-kv"><span class="kv-k">Difficulty</span><span class="kv-v orange">${info.difficulty} zeros</span></div>
     <div class="row-kv"><span class="kv-k">Block reward</span><span class="kv-v green">${info.blockReward} coins</span></div>
+    <div class="row-kv"><span class="kv-k">Peers</span><span class="kv-v purple">${info.peers ?? 0}</span></div>
   `;
 }
 
@@ -912,6 +914,7 @@ async function loadAll(prepend) {
     sv.className = 'val ' + (info.valid ? 'green' : 'red');
     document.getElementById('sDiff').textContent   = info.difficulty + ' zeros';
     document.getElementById('sReward').textContent = info.blockReward + ' coins';
+    document.getElementById('sPeers').textContent = info.peers ?? 0;
     blocks = bs || [];
     wallets = ws || [];
     document.getElementById('bdgBlocks').textContent = blocks.length;
