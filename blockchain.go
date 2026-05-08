@@ -79,6 +79,11 @@ func (bc *Blockchain) saveBlock(block *Block) error {
 	return bc.db.Put([]byte("height"), []byte(strconv.Itoa(block.Index)), nil)
 }
 
+func (bc *Blockchain) deleteBlock(index int) error {
+	key := []byte(fmt.Sprintf("block:%d", index))
+	return bc.db.Delete(key, nil)
+}
+
 func (bc *Blockchain) getBlock(index int) (*Block, error) {
 	key := []byte(fmt.Sprintf("block:%d", index))
 	data, err := bc.db.Get(key, nil)
@@ -184,6 +189,50 @@ func (bc *Blockchain) SubmitBlock(block *Block) error {
 		return err
 	}
 	bc.height = block.Index
+	return nil
+}
+
+func (bc *Blockchain) ReplaceTailFrom(start int, incoming []*Block) error {
+	if len(incoming) == 0 {
+		return nil
+	}
+	if start < 1 {
+		return fmt.Errorf("invalid replace start")
+	}
+	if start > bc.height+1 {
+		return fmt.Errorf("replace start beyond local height")
+	}
+	prev, err := bc.getBlock(start - 1)
+	if err != nil {
+		return err
+	}
+	lastIndex := start - 1
+	lastHash := prev.Hash
+	for i, b := range incoming {
+		if b == nil {
+			return fmt.Errorf("incoming block is nil")
+		}
+		expected := start + i
+		if b.Index != expected {
+			return fmt.Errorf("incoming block index mismatch")
+		}
+		if !b.IsValid(lastHash, Difficulty) {
+			return fmt.Errorf("incoming block invalid")
+		}
+		lastIndex = b.Index
+		lastHash = b.Hash
+	}
+	for i := bc.height; i >= start; i-- {
+		if err := bc.deleteBlock(i); err != nil {
+			return err
+		}
+	}
+	for _, b := range incoming {
+		if err := bc.saveBlock(b); err != nil {
+			return err
+		}
+	}
+	bc.height = lastIndex
 	return nil
 }
 
