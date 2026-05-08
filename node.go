@@ -170,6 +170,31 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 		_ = json.NewEncoder(w).Encode(node.p2p.PeerList())
 	})
 
+	mux.HandleFunc("/api/peer", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if node.p2p == nil {
+			http.Error(w, "p2p disabled", http.StatusServiceUnavailable)
+			return
+		}
+		var req struct {
+			Address string `json:"address"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		addr := normalizeAddr(req.Address)
+		if addr == "" {
+			http.Error(w, "invalid address", http.StatusBadRequest)
+			return
+		}
+		go node.p2p.Connect(addr)
+		w.WriteHeader(http.StatusAccepted)
+	})
+
 	mux.HandleFunc("/api/utxos", func(w http.ResponseWriter, r *http.Request) {
 		address := r.URL.Query().Get("address")
 		if address == "" {
