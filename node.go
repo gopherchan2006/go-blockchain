@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 )
@@ -125,12 +126,20 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 		node.mu.Lock()
 		defer node.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		var blocks []blockDTO
-		for i := 0; i <= node.bc.Height(); i++ {
-			b, err := node.bc.getBlock(i)
-			if err != nil {
-				continue
+		from := 0
+		limit := node.bc.Height() + 1
+		if v := r.URL.Query().Get("from"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				from = n
 			}
+		}
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		var blocks []blockDTO
+		for _, b := range node.bc.GetBlocksRange(from, limit) {
 			dto := blockToDTO(b)
 			blocks = append(blocks, dto)
 		}
