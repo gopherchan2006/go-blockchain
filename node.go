@@ -373,6 +373,9 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 			Address:    wallet.Address(),
 			PrivateKey: fmt.Sprintf("%x", d),
 		})
+		if node.p2p != nil {
+			node.p2p.BroadcastWallet(req.Name, wallet.Address(), "")
+		}
 	})
 
 	mux.HandleFunc("/api/wallet/export", func(w http.ResponseWriter, r *http.Request) {

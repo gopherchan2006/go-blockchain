@@ -24,6 +24,9 @@ type P2PMessage struct {
 	TxID       string         `json:"txID,omitempty"`
 	BlockHash  string         `json:"blockHash,omitempty"`
 	Start      int            `json:"start,omitempty"`
+	WalletName string         `json:"walletName,omitempty"`
+	WalletAddr string         `json:"walletAddr,omitempty"`
+	Wallets    []WalletMeta   `json:"wallets,omitempty"`
 }
 
 type Peer struct {
@@ -146,6 +149,7 @@ func (pm *PeerManager) registerConn(conn net.Conn, expectedAddr string) {
 	_ = pm.sendTo(peer, P2PMessage{Type: "hello", From: pm.listenAddr})
 	_ = pm.sendTo(peer, P2PMessage{Type: "get_peers", From: pm.listenAddr})
 	_ = pm.sendTo(peer, P2PMessage{Type: "get_height", From: pm.listenAddr})
+	_ = pm.sendTo(peer, P2PMessage{Type: "get_wallets", From: pm.listenAddr})
 	dec := json.NewDecoder(conn)
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(45 * time.Second))
@@ -204,6 +208,22 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		blocks := pm.node.bc.GetBlocksRange(msg.FromHeight, 256)
 		pm.node.mu.Unlock()
 		_ = pm.sendTo(peer, P2PMessage{Type: "blocks", Blocks: blocks, From: pm.listenAddr})
+	case "get_wallets":
+		metas, err := pm.node.wm.ListWalletMetas()
+		if err == nil {
+			_ = pm.sendTo(peer, P2PMessage{Type: "wallets", Wallets: metas, From: pm.listenAddr})
+		}
+	case "wallets":
+		for _, w := range msg.Wallets {
+			pm.applyWalletSync(w.Name, w.Address)
+		}
+	case "new_wallet":
+		if msg.WalletName == "" || msg.WalletAddr == "" {
+			return
+		}
+		if pm.applyWalletSync(msg.WalletName, msg.WalletAddr) {
+			pm.BroadcastWallet(msg.WalletName, msg.WalletAddr, peer.addr)
+		}
 	case "blocks":
 		pm.node.mu.Lock()
 		local := pm.node.bc.Height()
@@ -311,6 +331,27 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 	}
 }
 
+func (pm *PeerManager) applyWalletSync(name, address string) bool {
+	pm.node.mu.Lock()
+	defer pm.node.mu.Unlock()
+	hasAddr, err := pm.node.wm.HasAddress(address)
+	if err == nil && hasAddr {
+		return false
+	}
+	if err := pm.node.wm.CreateWatchWallet(name, address); err == nil {
+		return true
+	}
+	suffix := address
+	if len(suffix) > 6 {
+		suffix = suffix[len(suffix)-6:]
+	}
+	alias := fmt.Sprintf("%s-%s", name, suffix)
+	if err := pm.node.wm.CreateWatchWallet(alias, address); err == nil {
+		return true
+	}
+	return false
+}
+
 func flattenTxs(blocks []*Block) []*Transaction {
 	var out []*Transaction
 	for _, b := range blocks {
@@ -366,6 +407,19 @@ func (pm *PeerManager) BroadcastBlock(block *Block, skip string) {
 	}
 	pm.markBlockSeen(block.Hash)
 	msg := P2PMessage{Type: "new_block", Block: block, BlockHash: block.Hash, From: pm.listenAddr}
+	pm.broadcast(msg, normalizeAddr(skip))
+}
+
+func (pm *PeerManager) BroadcastWallet(name, address, skip string) {
+	if name == "" || address == "" {
+		return
+	}
+	msg := P2PMessage{
+		Type:       "new_wallet",
+		WalletName: name,
+		WalletAddr: address,
+		From:       pm.listenAddr,
+	}
 	pm.broadcast(msg, normalizeAddr(skip))
 }
 

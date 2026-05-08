@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 
@@ -32,6 +33,11 @@ type storedKey struct {
 	D []byte
 	X []byte
 	Y []byte
+}
+
+type WalletMeta struct {
+	Name    string
+	Address string
 }
 
 func NewWalletManager(dbPath string) (*WalletManager, error) {
@@ -174,4 +180,57 @@ func (wm *WalletManager) ListWallets() ([]string, error) {
 		names = append(names, strings.TrimPrefix(string(iter.Key()), "wallet:"))
 	}
 	return names, iter.Error()
+}
+
+func (wm *WalletManager) ListWalletMetas() ([]WalletMeta, error) {
+	names, err := wm.ListWallets()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]WalletMeta, 0, len(names))
+	for _, n := range names {
+		addr, err := wm.GetAddress(n)
+		if err != nil || addr == "" {
+			continue
+		}
+		out = append(out, WalletMeta{Name: n, Address: addr})
+	}
+	return out, nil
+}
+
+func (wm *WalletManager) HasAddress(address string) (bool, error) {
+	metas, err := wm.ListWalletMetas()
+	if err != nil {
+		return false, err
+	}
+	for _, m := range metas {
+		if m.Address == address {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (wm *WalletManager) CreateWatchWallet(name, address string) error {
+	key := []byte("wallet:" + name)
+	exists, err := wm.db.Has(key, nil)
+	if err != nil {
+		return err
+	}
+	if exists {
+		current, err := wm.GetAddress(name)
+		if err != nil {
+			return err
+		}
+		if current == address {
+			return nil
+		}
+		return fmt.Errorf("wallet already exists with different address: %s", name)
+	}
+	record := walletRecord{Address: address}
+	var recBuf bytes.Buffer
+	if err := gob.NewEncoder(&recBuf).Encode(record); err != nil {
+		return err
+	}
+	return wm.db.Put(key, recBuf.Bytes(), nil)
 }
