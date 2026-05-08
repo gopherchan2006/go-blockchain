@@ -131,10 +131,36 @@ func (bc *Blockchain) SubmitBlock(block *Block) error {
 	if !block.IsValid(prevBlock.Hash, Difficulty) {
 		return fmt.Errorf("invalid block")
 	}
+	if len(block.Transactions) == 0 {
+		return fmt.Errorf("block has no transactions")
+	}
+	coinbaseCount := 0
+	for _, tx := range block.Transactions {
+		if tx.IsCoinbase() {
+			coinbaseCount++
+		}
+	}
+	if coinbaseCount != 1 {
+		return fmt.Errorf("invalid coinbase count: %d", coinbaseCount)
+	}
+	coinbase := block.Transactions[0]
+	if !coinbase.IsCoinbase() {
+		return fmt.Errorf("first transaction must be coinbase")
+	}
+	if len(coinbase.Outputs) == 0 {
+		return fmt.Errorf("coinbase has no outputs")
+	}
+	allowedReward := BlockReward + sumFees(block.Transactions[1:])
+	if coinbase.Outputs[0].Amount > allowedReward {
+		return fmt.Errorf("coinbase exceeds allowed reward")
+	}
 	spentInBlock := make(map[string]map[int]bool)
 	for _, tx := range block.Transactions {
 		if tx.IsCoinbase() {
 			continue
+		}
+		if tx.Fee < MinMempoolFee {
+			return fmt.Errorf("transaction fee below minimum")
 		}
 		for _, in := range tx.Inputs {
 			if spentInBlock[in.TxID] == nil {
