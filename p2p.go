@@ -73,6 +73,7 @@ func (pm *PeerManager) Start() error {
 		go pm.Connect(addr)
 	}
 	go pm.gcSeen()
+	go pm.maintainConnectivity()
 	return nil
 }
 
@@ -370,6 +371,25 @@ func (pm *PeerManager) gcSeen() {
 				}
 			}
 			pm.seenMu.Unlock()
+		}
+	}
+}
+
+func (pm *PeerManager) maintainConnectivity() {
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-pm.closed:
+			return
+		case <-tick.C:
+			for _, addr := range pm.initialPeer {
+				addr = normalizeAddr(addr)
+				if addr == "" || addr == pm.listenAddr || pm.hasPeer(addr) {
+					continue
+				}
+				go pm.Connect(addr)
+			}
 		}
 	}
 }
