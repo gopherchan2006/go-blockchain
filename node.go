@@ -435,6 +435,11 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
+		node.mu.Lock()
+		if node.template != nil {
+			node.template = nil
+		}
+		node.mu.Unlock()
 		node.hub.Broadcast("new_tx", tx.ID)
 		if node.p2p != nil {
 			node.p2p.BroadcastTx(&tx, "")

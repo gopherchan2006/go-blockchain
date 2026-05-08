@@ -243,6 +243,11 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		if err := pm.node.mempool.Add(tx); err != nil {
 			return
 		}
+		pm.node.mu.Lock()
+		if pm.node.template != nil {
+			pm.node.template = nil
+		}
+		pm.node.mu.Unlock()
 		pm.node.hub.Broadcast("new_tx", tx.ID)
 		pm.BroadcastTx(tx, peer.addr)
 	case "new_block":
