@@ -815,7 +815,7 @@ function closeCreateWallet() {
 }
 function closeBackup() {
   document.getElementById('backupModal').style.display = 'none';
-  loadWallets();
+  loadAll(false);
 }
 async function submitCreateWallet() {
   const name = document.getElementById('cwName').value.trim();
@@ -837,6 +837,7 @@ async function submitCreateWallet() {
     const text = await res.text();
     if (!res.ok) { status.textContent = text.trim(); btn.disabled = false; return; }
     const data = JSON.parse(text);
+    await loadAll(false);
     closeCreateWallet();
     document.getElementById('bkAddress').textContent = data.address;
     document.getElementById('bkPrivKey').textContent = data.privateKey;
