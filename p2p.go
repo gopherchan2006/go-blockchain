@@ -188,7 +188,7 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 			msg.FromHeight = 0
 		}
 		pm.node.mu.Lock()
-		blocks := pm.node.bc.GetBlocksFrom(msg.FromHeight)
+		blocks := pm.node.bc.GetBlocksRange(msg.FromHeight, 256)
 		pm.node.mu.Unlock()
 		_ = pm.sendTo(peer, P2PMessage{Type: "blocks", Blocks: blocks, From: pm.listenAddr})
 	case "blocks":

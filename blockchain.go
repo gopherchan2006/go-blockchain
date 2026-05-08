@@ -392,14 +392,25 @@ func (bc *Blockchain) GetOutputAmount(txID string, outIndex int) float64 {
 }
 
 func (bc *Blockchain) GetBlocksFrom(from int) []*Block {
+	return bc.GetBlocksRange(from, 200)
+}
+
+func (bc *Blockchain) GetBlocksRange(from, limit int) []*Block {
 	if from < 0 {
 		from = 0
+	}
+	if limit <= 0 {
+		return nil
 	}
 	if from > bc.height {
 		return nil
 	}
-	out := make([]*Block, 0, bc.height-from+1)
-	for i := from; i <= bc.height; i++ {
+	maxTo := from + limit - 1
+	if maxTo > bc.height {
+		maxTo = bc.height
+	}
+	out := make([]*Block, 0, maxTo-from+1)
+	for i := from; i <= maxTo; i++ {
 		b, err := bc.getBlock(i)
 		if err != nil {
 			continue
