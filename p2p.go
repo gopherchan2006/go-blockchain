@@ -316,6 +316,7 @@ func compactBlocks(in []*Block) []*Block {
 func (pm *PeerManager) sendTo(peer *Peer, msg P2PMessage) error {
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
+	_ = peer.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	return peer.enc.Encode(msg)
 }
 
