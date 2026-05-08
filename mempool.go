@@ -88,3 +88,25 @@ func (m *Mempool) Load(path string) error {
 	m.txs = txs
 	return nil
 }
+
+func (m *Mempool) RemoveIncluded(blockTxs []*Transaction) {
+	if len(blockTxs) == 0 {
+		return
+	}
+	included := make(map[string]bool, len(blockTxs))
+	for _, tx := range blockTxs {
+		if tx != nil && tx.ID != "" {
+			included[tx.ID] = true
+		}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	next := m.txs[:0]
+	for _, tx := range m.txs {
+		if tx == nil || included[tx.ID] {
+			continue
+		}
+		next = append(next, tx)
+	}
+	m.txs = next
+}

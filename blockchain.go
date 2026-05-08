@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Difficulty  = 3
+	Difficulty  = 4
 	BlockReward = 10.0
 )
 
@@ -363,6 +363,24 @@ func (bc *Blockchain) GetOutputAmount(txID string, outIndex int) float64 {
 		}
 	}
 	return 0
+}
+
+func (bc *Blockchain) GetBlocksFrom(from int) []*Block {
+	if from < 0 {
+		from = 0
+	}
+	if from > bc.height {
+		return nil
+	}
+	out := make([]*Block, 0, bc.height-from+1)
+	for i := from; i <= bc.height; i++ {
+		b, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 func (bc *Blockchain) FindSpendableUTXOsWithMempool(address string, amount float64, mp *Mempool) ([]utxoRef, float64) {
