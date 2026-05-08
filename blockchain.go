@@ -96,6 +96,10 @@ func (bc *Blockchain) getBlock(index int) (*Block, error) {
 	return &block, err
 }
 
+func (bc *Blockchain) GetBlock(index int) (*Block, error) {
+	return bc.getBlock(index)
+}
+
 func (bc *Blockchain) Close() error {
 	return bc.db.Close()
 }
@@ -201,6 +205,14 @@ func (bc *Blockchain) ReplaceTailFrom(start int, incoming []*Block) error {
 	}
 	if start > bc.height+1 {
 		return fmt.Errorf("replace start beyond local height")
+	}
+	for i := 1; i < len(incoming); i++ {
+		if incoming[i] == nil || incoming[i-1] == nil {
+			return fmt.Errorf("incoming block is nil")
+		}
+		if incoming[i].Index != incoming[i-1].Index+1 {
+			return fmt.Errorf("incoming blocks must be contiguous")
+		}
 	}
 	prev, err := bc.getBlock(start - 1)
 	if err != nil {
