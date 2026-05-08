@@ -325,6 +325,27 @@ func (pm *PeerManager) BroadcastBlock(block *Block, skip string) {
 	pm.broadcast(msg, normalizeAddr(skip))
 }
 
+func (pm *PeerManager) RequestSyncFrom(addr string) {
+	addr = normalizeAddr(addr)
+	if addr == "" || addr == pm.listenAddr {
+		return
+	}
+	if !pm.hasPeer(addr) {
+		go pm.Connect(addr)
+		return
+	}
+	pm.mu.RLock()
+	peer := pm.peers[addr]
+	pm.mu.RUnlock()
+	if peer == nil {
+		return
+	}
+	pm.node.mu.Lock()
+	from := pm.node.bc.Height() + 1
+	pm.node.mu.Unlock()
+	_ = pm.sendTo(peer, P2PMessage{Type: "get_blocks", FromHeight: from, From: pm.listenAddr})
+}
+
 func (pm *PeerManager) broadcast(msg P2PMessage, skip string) {
 	pm.mu.RLock()
 	list := make([]*Peer, 0, len(pm.peers))
