@@ -22,6 +22,7 @@ type P2PMessage struct {
 	Block      *Block         `json:"block,omitempty"`
 	TxID       string         `json:"txID,omitempty"`
 	BlockHash  string         `json:"blockHash,omitempty"`
+	Start      int            `json:"start,omitempty"`
 }
 
 type Peer struct {
@@ -193,15 +194,23 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		_ = pm.sendTo(peer, P2PMessage{Type: "blocks", Blocks: blocks, From: pm.listenAddr})
 	case "blocks":
 		pm.node.mu.Lock()
-		for _, b := range msg.Blocks {
-			if b == nil {
-				continue
-			}
-			if b.Index <= pm.node.bc.Height() {
-				continue
-			}
-			if err := pm.node.bc.SubmitBlock(b); err != nil {
-				break
+		local := pm.node.bc.Height()
+		incoming := compactBlocks(msg.Blocks)
+		if len(incoming) > 0 {
+			start := incoming[0].Index
+			if start <= local {
+				if len(incoming) > (local - start + 1) {
+					_ = pm.node.bc.ReplaceTailFrom(start, incoming)
+				}
+			} else if start == local+1 {
+				for _, b := range incoming {
+					if b.Index <= pm.node.bc.Height() {
+						continue
+					}
+					if err := pm.node.bc.SubmitBlock(b); err != nil {
+						break
+					}
+				}
 			}
 		}
 		pm.node.mu.Unlock()
@@ -259,6 +268,25 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		pm.node.hub.Broadcast("new_block", fmt.Sprintf("%d", block.Index))
 		pm.BroadcastBlock(block, peer.addr)
 	}
+}
+
+func compactBlocks(in []*Block) []*Block {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*Block, 0, len(in))
+	last := -1
+	for _, b := range in {
+		if b == nil {
+			continue
+		}
+		if b.Index <= last {
+			continue
+		}
+		out = append(out, b)
+		last = b.Index
+	}
+	return out
 }
 
 func (pm *PeerManager) sendTo(peer *Peer, msg P2PMessage) error {
