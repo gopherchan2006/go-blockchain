@@ -236,7 +236,18 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 			return
 		}
 		pm.node.mu.Lock()
-		err := pm.node.bc.SubmitBlock(block)
+		localHeight := pm.node.bc.Height()
+		var err error
+		if block.Index == localHeight+1 {
+			err = pm.node.bc.SubmitBlock(block)
+		} else if block.Index > localHeight+1 {
+			_ = pm.sendTo(peer, P2PMessage{Type: "get_blocks", FromHeight: localHeight + 1, From: pm.listenAddr})
+			pm.node.mu.Unlock()
+			return
+		} else {
+			pm.node.mu.Unlock()
+			return
+		}
 		if err == nil {
 			pm.node.mempool.RemoveIncluded(block.Transactions)
 			pm.node.template = nil
