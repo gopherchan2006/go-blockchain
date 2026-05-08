@@ -1,0 +1,49 @@
+services:
+  node-a:
+    build: .
+    environment:
+      PORT: "3030"
+      P2P_PORT: "4030"
+      DATA_DIR: "/data"
+      PEERS: ""
+    ports:
+      - "3030:3030"
+      - "4030:4030"
+    volumes:
+      - node-a-data:/data
+
+  node-b:
+    build: .
+    environment:
+      PORT: "3031"
+      P2P_PORT: "4031"
+      DATA_DIR: "/data"
+      PEERS: "node-a:4030"
+    ports:
+      - "3031:3031"
+      - "4031:4031"
+    volumes:
+      - node-b-data:/data
+    depends_on:
+      - node-a
+
+  node-c:
+    build: .
+    environment:
+      PORT: "3032"
+      P2P_PORT: "4032"
+      DATA_DIR: "/data"
+      PEERS: "node-a:4030,node-b:4031"
+    ports:
+      - "3032:3032"
+      - "4032:4032"
+    volumes:
+      - node-c-data:/data
+    depends_on:
+      - node-a
+      - node-b
+
+volumes:
+  node-a-data:
+  node-b-data:
+  node-c-data:
