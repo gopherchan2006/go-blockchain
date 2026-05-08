@@ -204,6 +204,7 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 			"enabled": true,
 			"listen":  node.p2pAddr,
 			"peers":   node.p2p.PeerList(),
+			"height":  node.bc.Height(),
 		})
 	})
 
