@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 )
@@ -37,6 +38,7 @@ type Node struct {
 	wm       *WalletManager
 	mempool  *Mempool
 	hub      *EventHub
+	p2p      *PeerManager
 	mu       sync.Mutex
 	template *Block
 }
@@ -77,19 +79,30 @@ func (n *Node) refreshTemplate(minerAddress string) {
 	}
 }
 
-func RunNode(bcPath, walletsPath string, port int) error {
+func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) error {
 	node, err := NewNode(bcPath, walletsPath)
 	if err != nil {
 		return err
 	}
 	defer node.bc.Close()
 	defer node.wm.Close()
+	defer func() {
+		if node.p2p != nil {
+			_ = node.p2p.Close()
+		}
+	}()
 
-	const mempoolPath = "./mempool.dat"
+	mempoolPath := filepath.Join(filepath.Dir(bcPath), "mempool.dat")
 	if err := node.mempool.Load(mempoolPath); err != nil {
 		fmt.Printf("  Warning: could not load mempool: %v\n", err)
 	} else if node.mempool.Size() > 0 {
 		fmt.Printf("  Loaded %d pending transactions from mempool.dat\n", node.mempool.Size())
+	}
+
+	p2pAddr := fmt.Sprintf("127.0.0.1:%d", p2pPort)
+	node.p2p = NewPeerManager(node, p2pAddr, peers)
+	if err := node.p2p.Start(); err != nil {
+		return fmt.Errorf("cannot start p2p listener: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -145,6 +158,16 @@ func RunNode(bcPath, walletsPath string, port int) error {
 	mux.HandleFunc("/api/mempool", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(node.mempool.Peek())
+	})
+
+	mux.HandleFunc("/api/peers", func(w http.ResponseWriter, r *http.Request) {
+		if node.p2p == nil {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]string{})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(node.p2p.PeerList())
 	})
 
 	mux.HandleFunc("/api/utxos", func(w http.ResponseWriter, r *http.Request) {
@@ -316,6 +339,9 @@ func RunNode(bcPath, walletsPath string, port int) error {
 			return
 		}
 		node.hub.Broadcast("new_tx", tx.ID)
+		if node.p2p != nil {
+			node.p2p.BroadcastTx(&tx, "")
+		}
 		w.WriteHeader(http.StatusAccepted)
 	})
 
@@ -378,14 +404,18 @@ func RunNode(bcPath, walletsPath string, port int) error {
 		node.template.Nonce = sub.Nonce
 		node.template.Hash = sub.Hash
 
-		if err := node.bc.SubmitBlock(node.template); err != nil {
+		mined := node.template
+		if err := node.bc.SubmitBlock(mined); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		node.mempool.Flush()
+		node.mempool.RemoveIncluded(mined.Transactions)
 		node.template = nil
-		node.hub.Broadcast("block_mined", fmt.Sprintf("%d", node.bc.Height()))
+		node.hub.Broadcast("new_block", fmt.Sprintf("%d", node.bc.Height()))
+		if node.p2p != nil {
+			node.p2p.BroadcastBlock(mined, "")
+		}
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -408,9 +438,9 @@ func RunNode(bcPath, walletsPath string, port int) error {
 					txIDs[i] = tx.ID
 				}
 				tmplInfo = map[string]any{
-					"index":   node.template.Index,
-					"txCount": len(node.template.Transactions),
-					"txIDs":   txIDs,
+					"index":    node.template.Index,
+					"txCount":  len(node.template.Transactions),
+					"txIDs":    txIDs,
 					"prevHash": node.template.PrevHash,
 				}
 			}
@@ -487,6 +517,7 @@ func RunNode(bcPath, walletsPath string, port int) error {
 
 	addr := fmt.Sprintf(":%d", port)
 	fmt.Printf("  Node: http://localhost%s\n", addr)
+	fmt.Printf("  P2P: %s\n", p2pAddr)
 
 	srv := &http.Server{Addr: addr, Handler: mux}
 
