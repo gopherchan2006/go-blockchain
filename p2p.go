@@ -211,8 +211,23 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		if len(incoming) > 0 {
 			start := incoming[0].Index
 			if start <= local {
-				if len(incoming) > (local - start + 1) {
+				localSuffixLen := local - start + 1
+				shouldReplace := false
+				if len(incoming) > localSuffixLen {
+					shouldReplace = true
+				} else if len(incoming) == localSuffixLen {
+					localTip, err := pm.node.bc.GetBlock(local)
+					if err == nil && localTip != nil {
+						inTip := incoming[len(incoming)-1]
+						if inTip != nil && inTip.Hash != "" && localTip.Hash != "" && inTip.Hash < localTip.Hash {
+							shouldReplace = true
+						}
+					}
+				}
+				if shouldReplace {
 					_ = pm.node.bc.ReplaceTailFrom(start, incoming)
+					pm.node.mempool.RemoveIncluded(flattenTxs(incoming))
+					pm.node.template = nil
 				}
 			} else if start == local+1 {
 				for _, b := range incoming {
@@ -266,6 +281,11 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		var err error
 		if block.Index == localHeight+1 {
 			err = pm.node.bc.SubmitBlock(block)
+		} else if block.Index == localHeight {
+			localBlock, e := pm.node.bc.GetBlock(localHeight)
+			if e == nil && localBlock != nil && block.Hash < localBlock.Hash {
+				err = pm.node.bc.ReplaceTailFrom(localHeight, []*Block{block})
+			}
 		} else if block.Index > localHeight+1 {
 			_ = pm.sendTo(peer, P2PMessage{Type: "get_blocks", FromHeight: localHeight + 1, From: pm.listenAddr})
 			pm.node.mu.Unlock()
@@ -289,6 +309,17 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 	case "pong":
 		return
 	}
+}
+
+func flattenTxs(blocks []*Block) []*Transaction {
+	var out []*Transaction
+	for _, b := range blocks {
+		if b == nil {
+			continue
+		}
+		out = append(out, b.Transactions...)
+	}
+	return out
 }
 
 func compactBlocks(in []*Block) []*Block {
