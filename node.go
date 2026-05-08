@@ -254,7 +254,7 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 			http.Error(w, "invalid address", http.StatusBadRequest)
 			return
 		}
-		go node.p2p.Connect(addr)
+		go node.p2p.RequestSyncFrom(addr)
 		w.WriteHeader(http.StatusAccepted)
 	})
 
