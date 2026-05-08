@@ -292,6 +292,9 @@ func compactBlocks(in []*Block) []*Block {
 		if b.Index <= last {
 			continue
 		}
+		if len(out) > 0 && b.Index != last+1 {
+			break
+		}
 		out = append(out, b)
 		last = b.Index
 	}
