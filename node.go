@@ -224,6 +224,14 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 		json.NewEncoder(w).Encode(utxos)
 	})
 
+	mux.HandleFunc("/api/addresses", func(w http.ResponseWriter, r *http.Request) {
+		node.mu.Lock()
+		addresses := node.bc.KnownAddresses()
+		node.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(addresses)
+	})
+
 	mux.HandleFunc("/api/transaction/prepare", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

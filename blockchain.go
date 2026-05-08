@@ -391,6 +391,29 @@ func (bc *Blockchain) GetOutputAmount(txID string, outIndex int) float64 {
 	return 0
 }
 
+func (bc *Blockchain) KnownAddresses() []string {
+	uniq := make(map[string]struct{})
+	for i := 0; i <= bc.height; i++ {
+		block, err := bc.getBlock(i)
+		if err != nil {
+			continue
+		}
+		for _, tx := range block.Transactions {
+			for _, out := range tx.Outputs {
+				if out.Address == "" {
+					continue
+				}
+				uniq[out.Address] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(uniq))
+	for addr := range uniq {
+		out = append(out, addr)
+	}
+	return out
+}
+
 func (bc *Blockchain) GetBlocksFrom(from int) []*Block {
 	return bc.GetBlocksRange(from, 200)
 }
