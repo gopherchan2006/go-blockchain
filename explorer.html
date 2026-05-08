@@ -402,6 +402,7 @@
     <button class="tab-btn" data-tab="blocks">Blocks <span class="badge" id="bdgBlocks">—</span></button>
     <button class="tab-btn" data-tab="wallets">Wallets <span class="badge" id="bdgWallets">—</span></button>
     <button class="tab-btn" data-tab="mempool">Mempool <span class="badge" id="bdgMempool">0</span></button>
+    <button class="tab-btn" data-tab="network">Network</button>
     <button class="tab-btn" data-tab="events">Events <span class="badge" id="bdgEvents">0</span></button>
   </nav>
   <div class="header-right">
@@ -466,6 +467,16 @@
   <div class="page">
     <div class="sec">Pending Transactions</div>
     <div class="card" id="mpCard"><div class="empty">Loading…</div></div>
+  </div>
+</div>
+
+<div id="tab-network" class="tab-content">
+  <div class="page">
+    <div class="sec">Network Peers</div>
+    <div class="card">
+      <div class="card-head">Peer List</div>
+      <div class="card-body" id="peerListBody"><div class="empty">Loading…</div></div>
+    </div>
   </div>
 </div>
 
@@ -899,14 +910,26 @@ function renderNetStats(info) {
   `;
 }
 
+function renderPeers(peers) {
+  const el = document.getElementById('peerListBody');
+  if (!Array.isArray(peers) || peers.length === 0) {
+    el.innerHTML = '<div class="empty">No peers connected</div>';
+    return;
+  }
+  el.innerHTML = peers.map(p =>
+    `<div class="row-kv"><span class="kv-k">peer</span><span class="kv-v">${p}</span></div>`
+  ).join('');
+}
+
 // ── LOAD ──────────────────────────────────────
 async function loadAll(prepend) {
   try {
-    const [info, bs, ws, mp] = await Promise.all([
+    const [info, bs, ws, mp, ps] = await Promise.all([
       fetch('/api/info').then(r=>r.json()),
       fetch('/api/blocks').then(r=>r.json()),
       fetch('/api/wallets').then(r=>r.json()),
       fetch('/api/mempool').then(r=>r.ok?r.json():[]).catch(()=>[]),
+      fetch('/api/peers').then(r=>r.ok?r.json():[]).catch(()=>[]),
     ]);
     document.getElementById('sHeight').textContent = info.height;
     const sv = document.getElementById('sValid');
@@ -922,6 +945,7 @@ async function loadAll(prepend) {
     renderWallets();
     renderMempool(mp);
     renderNetStats(info);
+    renderPeers(ps);
     drawSpark(blocks);
   } catch(e) { console.error('load error', e); }
 }
