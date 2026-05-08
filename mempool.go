@@ -32,6 +32,9 @@ func (m *Mempool) Add(tx *Transaction) error {
 	}
 	spent := make(map[string]map[int]bool)
 	for _, existing := range m.txs {
+		if existing.ID != "" && existing.ID == tx.ID {
+			return fmt.Errorf("transaction already in mempool")
+		}
 		for _, in := range existing.Inputs {
 			if spent[in.TxID] == nil {
 				spent[in.TxID] = make(map[int]bool)
