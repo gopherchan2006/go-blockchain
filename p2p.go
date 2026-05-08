@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"sort"
 	"strconv"
@@ -147,8 +148,12 @@ func (pm *PeerManager) registerConn(conn net.Conn, expectedAddr string) {
 	_ = pm.sendTo(peer, P2PMessage{Type: "get_height", From: pm.listenAddr})
 	dec := json.NewDecoder(conn)
 	for {
+		_ = conn.SetReadDeadline(time.Now().Add(45 * time.Second))
 		var msg P2PMessage
 		if err := dec.Decode(&msg); err != nil {
+			if err == io.EOF {
+				break
+			}
 			break
 		}
 		pm.handleMessage(peer, msg)
@@ -267,6 +272,10 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		}
 		pm.node.hub.Broadcast("new_block", fmt.Sprintf("%d", block.Index))
 		pm.BroadcastBlock(block, peer.addr)
+	case "ping":
+		_ = pm.sendTo(peer, P2PMessage{Type: "pong", From: pm.listenAddr})
+	case "pong":
+		return
 	}
 }
 
@@ -422,6 +431,15 @@ func (pm *PeerManager) maintainConnectivity() {
 		case <-pm.closed:
 			return
 		case <-tick.C:
+			pm.mu.RLock()
+			peers := make([]*Peer, 0, len(pm.peers))
+			for _, p := range pm.peers {
+				peers = append(peers, p)
+			}
+			pm.mu.RUnlock()
+			for _, p := range peers {
+				_ = pm.sendTo(p, P2PMessage{Type: "ping", From: pm.listenAddr})
+			}
 			for _, addr := range pm.initialPeer {
 				addr = normalizeAddr(addr)
 				if addr == "" || addr == pm.listenAddr || pm.hasPeer(addr) {
