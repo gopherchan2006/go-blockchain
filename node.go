@@ -170,6 +170,18 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 		_ = json.NewEncoder(w).Encode(node.p2p.PeerList())
 	})
 
+	mux.HandleFunc("/api/p2p/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if node.p2p == nil {
+			_ = json.NewEncoder(w).Encode(map[string]any{"enabled": false})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled": true,
+			"peers":   node.p2p.PeerList(),
+		})
+	})
+
 	mux.HandleFunc("/api/peer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
