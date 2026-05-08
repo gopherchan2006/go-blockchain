@@ -386,6 +386,222 @@
       border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--red);
       line-height: 1.5;
     }
+
+    body {
+      background: #0b1220;
+      color: #d6e0f0;
+      font-family: Inter, "Segoe UI", sans-serif;
+    }
+    .bg-grid { display: none; }
+    .progress-bar {
+      height: 2px;
+      background: linear-gradient(90deg, #4f8cff, #6ea8ff);
+      opacity: .9;
+    }
+    .app-header {
+      height: 58px;
+      background: rgba(11,18,32,.9);
+      border-bottom: 1px solid #1e2a44;
+      backdrop-filter: blur(10px);
+      padding: 0 20px;
+    }
+    .app-logo {
+      color: #f2f6ff;
+      font-weight: 700;
+      letter-spacing: 0;
+      gap: 10px;
+    }
+    .tabs { gap: 2px; }
+    .tab-btn {
+      color: #8fa2c4;
+      font-size: 14px;
+      border-bottom: 2px solid transparent;
+      padding: 0 14px;
+    }
+    .tab-btn:hover { color: #d6e0f0; }
+    .tab-btn.active {
+      color: #f2f6ff;
+      border-bottom-color: #5f8cff;
+    }
+    .badge {
+      background: #13203a;
+      border: 1px solid #24375f;
+      color: #9cb0d2;
+    }
+    .search-input {
+      background: #111c32;
+      border: 1px solid #24375f;
+      color: #dce7fb;
+      border-radius: 8px;
+    }
+    .search-input:focus { border-color: #5f8cff; }
+    .stats-bar {
+      background: transparent;
+      gap: 10px;
+      padding: 14px 16px 0;
+    }
+    .stat {
+      background: #101b31;
+      border: 1px solid #1f3157;
+      border-radius: 12px;
+      padding: 14px 12px;
+    }
+    .stat .lbl { color: #8ea2c2; }
+    .stat .val {
+      font-family: "JetBrains Mono","Fira Code",monospace;
+      font-size: 20px;
+      color: #e6eeff;
+    }
+    .blue { color: #78a6ff; }
+    .orange { color: #ffbf66; }
+    .green { color: #56d38a; }
+    .purple { color: #b2a0ff; }
+    .page {
+      max-width: 1120px;
+      padding: 22px 16px 28px;
+    }
+    .sec {
+      color: #8ea2c2;
+      letter-spacing: 1.1px;
+      margin-bottom: 12px;
+    }
+    .sec::after { background: #1f3157; }
+    .card,
+    .block-card,
+    .wcard,
+    .elog {
+      background: #0f1a30;
+      border: 1px solid #1f3157;
+      border-radius: 12px;
+      backdrop-filter: none;
+    }
+    .card-head,
+    .elog-head {
+      border-bottom: 1px solid #1f3157;
+      color: #97acd0;
+      font-size: 11px;
+    }
+    .block-row:hover { background: #12213d; }
+    .block-card:hover { border-color: #315082; }
+    .bidx {
+      background: #1d335c;
+      color: #d8e7ff;
+      border: 1px solid #2d4b80;
+    }
+    .bidx.g {
+      background: #4a3b82;
+      border: 1px solid #6e5ab3;
+      color: #f0eaff;
+    }
+    .bhash { color: #dce7fb; }
+    .z { color: #7cadff; }
+    .r { color: #9eb2d4; }
+    .bhrow {
+      background: #12213d;
+      border-top: 1px solid #1f3157;
+      color: #8ea2c2;
+    }
+    .tx-item { border-top: 1px solid #1f3157; }
+    .txid { color: #99aed1; }
+    .pill-addr {
+      background: #12213d;
+      border: 1px solid #2a4578;
+      color: #b6c8e8;
+    }
+    .pill-addr:hover {
+      border-color: #5f8cff;
+      color: #dbe7ff;
+    }
+    .pill-amt {
+      background: rgba(86,211,138,.12);
+      border: 1px solid rgba(86,211,138,.35);
+      color: #6be79c;
+    }
+    .tx-data-box {
+      background: #142545;
+      border-left: 3px solid #8d7be0;
+      color: #dce7fb;
+    }
+    .wcard:hover {
+      border-color: #3a5d96;
+      transform: translateY(-1px);
+    }
+    .wava {
+      background: linear-gradient(135deg,#1a2e53,#1f3a66);
+      border: 1px solid #2d4b80;
+    }
+    .wname { color: #e5eeff; }
+    .waddr {
+      background: #12213d;
+      color: #a6bbdf;
+    }
+    .wbal { color: #63dd94; }
+    .btn-create-wallet {
+      background: #193362;
+      border: 1px solid #2f528f;
+      color: #d9e8ff;
+    }
+    .btn-create-wallet:hover { background: #214078; }
+    .btn-unlock {
+      border: 1px solid #2a4578;
+      color: #9fb3d6;
+    }
+    .btn-unlock:hover {
+      border-color: #5f8cff;
+      color: #dce7fb;
+    }
+    .btn-send {
+      background: rgba(86,211,138,.15);
+      border: 1px solid rgba(86,211,138,.35);
+      color: #6be79c;
+    }
+    .btn-send:hover { background: rgba(86,211,138,.24); }
+    .mp-table th,
+    .mp-table td { border-bottom: 1px solid #1f3157; }
+    .mp-table th { color: #91a6ca; }
+    .mp-table td { color: #a9bddf; }
+    .mp-table tr:hover td { background: #12213d; }
+    .eline { border-bottom: 1px solid #1f3157; }
+    .eline:hover { background: #12213d; }
+    .ets { color: #8ea2c2; }
+    .edat { color: #dce7fb; }
+    .empty { color: #90a4c6; }
+    .modal {
+      background: #111d36;
+      border: 1px solid #2a4578;
+      border-radius: 14px;
+    }
+    .modal-head,
+    .modal-foot { border-color: #2a4578; }
+    .form-val,
+    .form-input,
+    .pw-input,
+    .pk-box {
+      background: #12213d;
+      border-color: #2a4578;
+      color: #dce7fb;
+    }
+    .form-input:focus,
+    .pw-input:focus { border-color: #5f8cff; }
+    .btn-cancel {
+      border: 1px solid #2a4578;
+      color: #a6bbdf;
+    }
+    .btn-primary {
+      background: #5f8cff;
+      color: #061126;
+      font-weight: 700;
+    }
+    .btn-primary:disabled { opacity: .55; }
+    @media(max-width:700px) {
+      .stats-bar {
+        grid-template-columns: repeat(2,1fr) !important;
+        padding-top: 10px;
+      }
+      .app-header { padding: 0 10px; }
+      .search-input { width: 160px; }
+      .search-input:focus { width: 190px; }
+    }
   </style>
 </head>
 <body>
@@ -395,7 +611,7 @@
 <header class="app-header">
   <div class="app-logo">
     <div class="live-dot off" id="liveDot"></div>
-    <span style="color:var(--blue)">&lt;</span> gochain <span style="color:var(--blue)">/&gt;</span>
+    <span style="color:var(--blue)">●</span> Gochain Explorer
   </div>
   <nav class="tabs" id="tabNav">
     <button class="tab-btn active" data-tab="overview">Overview</button>
