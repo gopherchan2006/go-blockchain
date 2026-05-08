@@ -39,6 +39,7 @@ type Node struct {
 	mempool  *Mempool
 	hub      *EventHub
 	p2p      *PeerManager
+	p2pAddr  string
 	mu       sync.Mutex
 	template *Block
 }
@@ -101,6 +102,7 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 
 	p2pAddr := fmt.Sprintf("127.0.0.1:%d", p2pPort)
 	node.p2p = NewPeerManager(node, p2pAddr, peers)
+	node.p2pAddr = p2pAddr
 	if err := node.p2p.Start(); err != nil {
 		return fmt.Errorf("cannot start p2p listener: %w", err)
 	}
@@ -178,6 +180,7 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"enabled": true,
+			"listen":  node.p2pAddr,
 			"peers":   node.p2p.PeerList(),
 		})
 	})
