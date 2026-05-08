@@ -206,8 +206,9 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 			http.Error(w, "amount must be positive", http.StatusBadRequest)
 			return
 		}
-		if req.Fee < 0 {
-			req.Fee = 0
+		if req.Fee < MinMempoolFee {
+			http.Error(w, fmt.Sprintf("fee too low: minimum %.8f", MinMempoolFee), http.StatusBadRequest)
+			return
 		}
 		need := req.Amount + req.Fee
 		node.mu.Lock()

@@ -7,6 +7,11 @@ import (
 	"sync"
 )
 
+const (
+	MaxMempoolSize = 5000
+	MinMempoolFee  = 0.0001
+)
+
 type Mempool struct {
 	mu  sync.Mutex
 	txs []*Transaction
@@ -19,6 +24,12 @@ func NewMempool() *Mempool {
 func (m *Mempool) Add(tx *Transaction) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.txs) >= MaxMempoolSize {
+		return fmt.Errorf("mempool full")
+	}
+	if !tx.IsCoinbase() && tx.Fee < MinMempoolFee {
+		return fmt.Errorf("fee too low: minimum %.8f", MinMempoolFee)
+	}
 	spent := make(map[string]map[int]bool)
 	for _, existing := range m.txs {
 		for _, in := range existing.Inputs {
