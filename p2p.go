@@ -188,6 +188,13 @@ func (pm *PeerManager) handleMessage(peer *Peer, msg P2PMessage) {
 		pm.node.mu.Unlock()
 		if msg.Height > local {
 			_ = pm.sendTo(peer, P2PMessage{Type: "get_blocks", FromHeight: local + 1, From: pm.listenAddr})
+		} else if local > msg.Height {
+			pm.node.mu.Lock()
+			blocks := pm.node.bc.GetBlocksRange(msg.Height+1, 128)
+			pm.node.mu.Unlock()
+			if len(blocks) > 0 {
+				_ = pm.sendTo(peer, P2PMessage{Type: "blocks", Blocks: blocks, From: pm.listenAddr})
+			}
 		}
 	case "get_blocks":
 		if msg.FromHeight < 0 {
