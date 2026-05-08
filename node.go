@@ -113,12 +113,25 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
 		node.mu.Lock()
 		defer node.mu.Unlock()
+		peerCount := 0
+		if node.p2p != nil {
+			peers := node.p2p.PeerList()
+			if len(peers) > 0 {
+				peerCount = len(peers) - 1
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(infoDTO{
+		_ = json.NewEncoder(w).Encode(struct {
+			infoDTO
+			Peers int `json:"peers"`
+		}{
+			infoDTO: infoDTO{
 			Height:      node.bc.Height(),
 			Valid:       node.bc.IsValid(),
 			Difficulty:  Difficulty,
 			BlockReward: BlockReward,
+			},
+			Peers: peerCount,
 		})
 	})
 
