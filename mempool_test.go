@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 )
 
@@ -98,5 +99,35 @@ func TestMempoolFull(t *testing.T) {
 	tx := &Transaction{Fee: MinMempoolFee, ID: "last"}
 	if err := m.Add(tx); err == nil {
 		t.Fatal("expected full")
+	}
+}
+
+func TestMempoolSaveLoadRoundtrip(t *testing.T) {
+	m := NewMempool()
+	tx := &Transaction{Fee: MinMempoolFee, ID: "round"}
+	if err := m.Add(tx); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "mp.json")
+	if err := m.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	m2 := NewMempool()
+	if err := m2.Load(path); err != nil {
+		t.Fatal(err)
+	}
+	if m2.Size() != 1 || m2.Peek()[0].ID != "round" {
+		t.Fatal("load")
+	}
+}
+
+func TestMempoolLoadMissingFile(t *testing.T) {
+	m := NewMempool()
+	path := filepath.Join(t.TempDir(), "missing.json")
+	if err := m.Load(path); err != nil {
+		t.Fatal(err)
+	}
+	if m.Size() != 0 {
+		t.Fatal("size")
 	}
 }
