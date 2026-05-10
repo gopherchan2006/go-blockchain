@@ -5,6 +5,7 @@ services:
       PORT: "3030"
       P2P_PORT: "4030"
       DATA_DIR: "/data"
+      LOG_DIR: "/data/logs"
       PEERS: ""
     ports:
       - "3030:3030"
@@ -18,6 +19,7 @@ services:
       PORT: "3031"
       P2P_PORT: "4031"
       DATA_DIR: "/data"
+      LOG_DIR: "/data/logs"
       PEERS: "node-a:4030"
     ports:
       - "3031:3031"
@@ -33,6 +35,7 @@ services:
       PORT: "3032"
       P2P_PORT: "4032"
       DATA_DIR: "/data"
+      LOG_DIR: "/data/logs"
       PEERS: "node-a:4030,node-b:4031"
     ports:
       - "3032:3032"

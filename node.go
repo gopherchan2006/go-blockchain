@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 )
@@ -624,7 +625,13 @@ func RunNode(bcPath, walletsPath string, port, p2pPort int, peers []string) erro
 	fmt.Printf("  Node: http://localhost%s\n", addr)
 	fmt.Printf("  P2P: %s\n", p2pAddr)
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	accessLog, err := openAccessLog(strings.TrimSpace(os.Getenv("LOG_DIR")))
+	if err != nil {
+		return fmt.Errorf("http access log: %w", err)
+	}
+	defer accessLog.Close()
+
+	srv := &http.Server{Addr: addr, Handler: withHTTPAccessLog(mux, accessLog.logger)}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
