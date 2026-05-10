@@ -45,7 +45,6 @@ func (a *accessLogWriter) Close() error {
 	return a.file.Close()
 }
 
-// responseRecorder wraps http.ResponseWriter for status code; delegates http.Flusher for SSE.
 type responseRecorder struct {
 	http.ResponseWriter
 	status int
