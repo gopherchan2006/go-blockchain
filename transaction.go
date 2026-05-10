@@ -99,7 +99,7 @@ func (tx *Transaction) dataToSign() string {
 	for _, out := range tx.Outputs {
 		data += fmt.Sprintf("%s%.8f", out.Address, out.Amount)
 	}
-	data += tx.Data // Include arbitrary data in signature
+	data += tx.Data
 	return data
 }
 
@@ -136,7 +136,6 @@ func NewTransaction(from *Wallet, toAddress string, amount float64, bc *Blockcha
 	outputs := []TxOutput{
 		{Amount: amount, Address: toAddress},
 	}
-	// сдача обратно отправителю
 	if total > amount {
 		outputs = append(outputs, TxOutput{Amount: total - amount, Address: from.Address()})
 	}
@@ -151,10 +150,7 @@ func NewTransaction(from *Wallet, toAddress string, amount float64, bc *Blockcha
 	return tx, nil
 }
 
-// NewDataTransaction creates a transaction for storing arbitrary data on the blockchain
-// (Similar to Bitcoin's OP_RETURN or storing text in block data field)
 func NewDataTransaction(from *Wallet, data string, bc *Blockchain) (*Transaction, error) {
-	// Data-only transaction: tiny amount to pay for inclusion
 	utxos, total := bc.FindSpendableUTXOs(from.Address(), 0.001)
 
 	if total < 0.001 {
@@ -172,7 +168,6 @@ func NewDataTransaction(from *Wallet, data string, bc *Blockchain) (*Transaction
 		}
 	}
 
-	// Dust output (minimal amount) or send back as change
 	outputs := []TxOutput{
 		{Amount: 0.001, Address: "DATA_STORAGE"},
 	}
